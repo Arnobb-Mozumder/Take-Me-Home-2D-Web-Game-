@@ -1,6 +1,6 @@
 {
   "name": "2D Side-Scrolling Platformer",
-  "description": "Playable 2D side-scrolling platformer prototype with smooth sprite animations, physics, and camera controls.",
+  "description": "2D Football side-scroller platformer featuring dynamic physics, custom start menu, level 1 parallax background, sand drag, mid-air teleportation, breakable walls, and persistence.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

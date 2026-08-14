@@ -4,6 +4,7 @@ import { GameDebugInfo } from '../game/types';
 import { DebugPanel } from './DebugPanel';
 import { ControlsGuide } from './ControlsGuide';
 import { SpriteUploaderModal } from './SpriteUploaderModal';
+import { StartMenu } from './StartMenu';
 
 export const GameCanvas: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -13,12 +14,15 @@ export const GameCanvas: React.FC = () => {
   const [debugInfo, setDebugInfo] = useState<GameDebugInfo | null>(null);
   const [showDebugBoxes, setShowDebugBoxes] = useState(false);
   const [isSpriteModalOpen, setIsSpriteModalOpen] = useState(false);
+  const [isStartMenuOpen, setIsStartMenuOpen] = useState(true);
+  const [hasActiveGame, setHasActiveGame] = useState(false);
 
   useEffect(() => {
     if (!canvasRef.current || !containerRef.current) return;
 
-    // Initialize Game
-    const game = new Game(canvasRef.current);
+    // Initialize Game with matched container resolution
+    const { clientWidth, clientHeight } = containerRef.current;
+    const game = new Game(canvasRef.current, clientWidth || window.innerWidth, clientHeight || window.innerHeight);
     gameRef.current = game;
 
     // Set debug info callback
@@ -29,8 +33,10 @@ export const GameCanvas: React.FC = () => {
     // Handle Resize
     const updateSize = () => {
       if (!containerRef.current || !canvasRef.current || !gameRef.current) return;
-      const { clientWidth, clientHeight } = containerRef.current;
-      gameRef.current.resize(clientWidth, clientHeight);
+      const { clientWidth: w, clientHeight: h } = containerRef.current;
+      if (w > 0 && h > 0) {
+        gameRef.current.resize(w, h);
+      }
     };
 
     const resizeObserver = new ResizeObserver(() => {
@@ -43,7 +49,16 @@ export const GameCanvas: React.FC = () => {
     // Start Game Loop
     game.start();
 
+    // Global Key Listener for Escape (toggle Start Menu)
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsStartMenuOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
     return () => {
+      window.removeEventListener('keydown', handleKeyDown);
       resizeObserver.disconnect();
       game.destroy();
       gameRef.current = null;
@@ -51,12 +66,11 @@ export const GameCanvas: React.FC = () => {
   }, []);
 
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (isStartMenuOpen) return;
     if (!canvasRef.current || !gameRef.current) return;
     const rect = canvasRef.current.getBoundingClientRect();
-    const scaleX = 1365 / rect.width;
-    const scaleY = 768 / rect.height;
-    const canvasX = (e.clientX - rect.left) * scaleX;
-    const canvasY = (e.clientY - rect.top) * scaleY;
+    const canvasX = e.clientX - rect.left;
+    const canvasY = e.clientY - rect.top;
     const worldX = gameRef.current.camera.x + canvasX;
     const worldY = gameRef.current.camera.y + canvasY;
 
@@ -70,41 +84,86 @@ export const GameCanvas: React.FC = () => {
     }
   };
 
+  const handleNewGame = () => {
+    if (gameRef.current) {
+      gameRef.current.startNewGame();
+    }
+    setIsStartMenuOpen(false);
+    setHasActiveGame(true);
+  };
+
+  const handleLoadGame = () => {
+    if (gameRef.current) {
+      gameRef.current.loadSavedGame();
+    }
+    setIsStartMenuOpen(false);
+    setHasActiveGame(true);
+  };
+
+  const handleResumeGame = () => {
+    setIsStartMenuOpen(false);
+  };
+
   return (
     <div
       ref={containerRef}
-      className="relative w-full h-screen bg-slate-950 flex items-center justify-center overflow-hidden select-none focus:outline-none"
+      className="relative w-screen h-screen bg-slate-950 flex items-center justify-center overflow-hidden select-none focus:outline-none"
       tabIndex={0}
       autoFocus
     >
-      {/* Main Canvas with fixed 1365x768 aspect ratio container */}
+      {/* Dynamic full-screen canvas */}
       <canvas
         ref={canvasRef}
-        width={1365}
-        height={768}
-        className="block max-w-full max-h-full cursor-default touch-none object-contain shadow-2xl rounded-sm"
+        className="block w-full h-full cursor-default touch-none"
+        onClick={handleCanvasClick}
       />
 
-      {/* Debug Panel in Top Corner */}
-      <DebugPanel
-        debugInfo={debugInfo}
-        showDebugBoxes={showDebugBoxes}
-        onToggleDebugBoxes={handleToggleDebugBoxes}
-        onOpenSpriteInspector={() => setIsSpriteModalOpen(true)}
+      {/* Interactive Start Menu Overlay using start_menue.png */}
+      <StartMenu
+        isOpen={isStartMenuOpen}
+        onNewGame={handleNewGame}
+        onLoadGame={handleLoadGame}
+        onResumeGame={handleResumeGame}
+        hasActiveGame={hasActiveGame}
       />
 
-      {/* Controls Guide & Touch Buttons */}
-      <ControlsGuide
-        onVirtualLeftStart={() => gameRef.current?.input.setVirtualLeft(true)}
-        onVirtualLeftEnd={() => gameRef.current?.input.setVirtualLeft(false)}
-        onVirtualRightStart={() => gameRef.current?.input.setVirtualRight(true)}
-        onVirtualRightEnd={() => gameRef.current?.input.setVirtualRight(false)}
-        onVirtualJumpStart={() => gameRef.current?.input.setVirtualJumpState(true)}
-        onVirtualJumpEnd={() => gameRef.current?.input.setVirtualJumpState(false)}
-        onVirtualKickStart={() => gameRef.current?.input.setVirtualKickState(true)}
-        onVirtualKickEnd={() => gameRef.current?.input.setVirtualKickState(false)}
-        onVirtualTeleport={() => gameRef.current?.input.triggerVirtualTeleport()}
-      />
+      {/* Narrow Minimal Debug Panel in Top-Left Corner */}
+      {!isStartMenuOpen && (
+        <DebugPanel
+          debugInfo={debugInfo}
+          showDebugBoxes={showDebugBoxes}
+          onToggleDebugBoxes={handleToggleDebugBoxes}
+          onOpenSpriteInspector={() => setIsSpriteModalOpen(true)}
+          onSaveGame={() => gameRef.current?.saveGameProgress(true, 'Manual Save Complete!')}
+          onResetProgress={() => gameRef.current?.resetGameProgress()}
+          onSwitchChapter={(chapter) => gameRef.current?.switchLevel(chapter)}
+          onWarpToTunnel={() => {
+            if (gameRef.current) {
+              gameRef.current.player.reset(7880, 360);
+              gameRef.current.football.reset(7920, 396);
+              gameRef.current.camera.x = 7400;
+            }
+          }}
+          onOpenStartMenu={() => setIsStartMenuOpen(true)}
+        />
+      )}
+
+      {/* Slim & Narrow Controls Guide & Bottom Toolbar */}
+      {!isStartMenuOpen && (
+        <ControlsGuide
+          onVirtualLeftStart={() => gameRef.current?.input.setVirtualLeft(true)}
+          onVirtualLeftEnd={() => gameRef.current?.input.setVirtualLeft(false)}
+          onVirtualRightStart={() => gameRef.current?.input.setVirtualRight(true)}
+          onVirtualRightEnd={() => gameRef.current?.input.setVirtualRight(false)}
+          onVirtualJumpStart={() => gameRef.current?.input.setVirtualJumpState(true)}
+          onVirtualJumpEnd={() => gameRef.current?.input.setVirtualJumpState(false)}
+          onVirtualKickStart={() => gameRef.current?.input.setVirtualKickState(true)}
+          onVirtualKickEnd={() => gameRef.current?.input.setVirtualKickState(false)}
+          onVirtualTeleport={() => gameRef.current?.input.triggerVirtualTeleport()}
+          onVirtualRecall={() => gameRef.current?.input.triggerVirtualRecall()}
+          onOpenStartMenu={() => setIsStartMenuOpen(true)}
+        />
+      )}
 
       {/* Custom Sprite Inspector & Uploader Modal */}
       <SpriteUploaderModal

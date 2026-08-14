@@ -5,6 +5,11 @@ export interface Rect {
   height: number;
 }
 
+export interface SandArea extends Rect {
+  id: string;
+  frictionMultiplier?: number;
+}
+
 export interface Platform extends Rect {
   id: string;
   type?: 'ground' | 'platform' | 'wall' | 'ramp' | 'bridge';
@@ -38,6 +43,14 @@ export interface Checkpoint extends Rect {
   ballSpawnX: number;
   ballSpawnY: number;
   isActive: boolean;
+}
+
+export interface CavePortal extends Rect {
+  id: string;
+  targetLevel: number;
+  title: string;
+  subtitle: string;
+  signText: string;
 }
 
 export type PlayerState = 'IDLE' | 'RUN' | 'JUMP' | 'KICK' | 'CLIMB';
@@ -88,6 +101,8 @@ export interface FootballDebugInfo {
 }
 
 export interface EnvironmentDebugInfo {
+  currentLevel: number;
+  chapterTitle: string;
   activeCheckpoint: string;
   currentTerrain: string;
   waterCollision: boolean;
@@ -98,10 +113,23 @@ export interface EnvironmentDebugInfo {
   requiredWallBreakStrength: number;
 }
 
+export interface DogDebugInfo {
+  id: string;
+  state: string;
+  health: number;
+  maxHealth: number;
+  x: number;
+  y: number;
+  distanceToPlayer: number;
+}
+
 export interface GameDebugInfo {
   player: PlayerDebugInfo;
   football: FootballDebugInfo;
   environment: EnvironmentDebugInfo;
-  gameState: 'PLAYING' | 'BALL_LOST' | 'PLAYER_DIED';
+  dogs?: DogDebugInfo[];
+  gameState: 'PLAYING' | 'BALL_LOST' | 'PLAYER_DIED' | 'LEVEL_TRANSITION';
+  lastSavedTime?: number;
+  hasSavedGame?: boolean;
 }
 

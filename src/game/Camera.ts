@@ -21,15 +21,18 @@ export class Camera {
   }
 
   public update(playerX: number, playerY: number, levelWidth: number, levelHeight: number, dt: number) {
-    // Keep player centered at ~35% from left edge so player can see ahead
-    const idealX = playerX - this.viewWidth * 0.35;
+    // Keep player framed with strong forward lookahead (~26% from left edge) so player can see wide canal and opposite landing bank
+    const idealX = playerX - this.viewWidth * 0.26;
     const maxX = Math.max(0, levelWidth - this.viewWidth);
     this.targetX = Math.max(0, Math.min(idealX, maxX));
 
-    // Smooth Y tracking keeping player in vertical view
-    const idealY = playerY - this.viewHeight * 0.55;
+    // Upward-biased camera Y:
+    // Frames the boy slightly in the lower half (approx 68% down the screen),
+    // giving plenty of upward headroom to see high obstacles, trajectory arcs, and overhead structures.
+    const idealY = playerY - this.viewHeight * 0.68;
     const maxY = Math.max(0, levelHeight - this.viewHeight);
-    this.targetY = Math.max(0, Math.min(idealY, maxY));
+    // Allow camera to move upward to negative Y values (up to -150px) if needed for headroom
+    this.targetY = Math.max(-150, Math.min(idealY, maxY));
 
     // Smooth Lerp Interpolation
     const lerpFactor = Math.min(1, dt * this.lerpSpeed);

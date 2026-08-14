@@ -26,21 +26,32 @@ export class Physics {
     moveDir: number, // -1, 0, or 1
     dt: number,
     platforms: Platform[],
-    isSprinting: boolean = false
+    isSprinting: boolean = false,
+    inSand: boolean = false
   ) {
-    const targetCap = isSprinting ? this.maxSpeed : this.normalSpeed;
+    let targetCap = isSprinting ? this.maxSpeed : this.normalSpeed;
+    let currentAccel = this.accel;
+    let currentDecel = this.decel;
+
+    // In sand: movement becomes sluggish and slowed down
+    if (inSand) {
+      targetCap *= 0.55; // ~120 px/s in sand
+      currentAccel *= 0.7;
+      currentDecel *= 1.4;
+    }
+
     if (moveDir !== 0) {
       // Accelerate in move direction
-      entity.vx += moveDir * this.accel * dt;
+      entity.vx += moveDir * currentAccel * dt;
       if (Math.abs(entity.vx) > targetCap) {
         entity.vx = Math.sign(entity.vx) * targetCap;
       }
     } else {
       // Decelerate / Friction
       if (entity.vx > 0) {
-        entity.vx = Math.max(0, entity.vx - this.decel * dt);
+        entity.vx = Math.max(0, entity.vx - currentDecel * dt);
       } else if (entity.vx < 0) {
-        entity.vx = Math.min(0, entity.vx + this.decel * dt);
+        entity.vx = Math.min(0, entity.vx + currentDecel * dt);
       }
     }
 

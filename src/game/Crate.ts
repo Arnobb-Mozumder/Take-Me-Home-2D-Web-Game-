@@ -113,9 +113,9 @@ export class Crate {
     }
   }
 
-  public render(ctx: CanvasRenderingContext2D, cameraX: number, showDebugBoxes: boolean = false) {
+  public render(ctx: CanvasRenderingContext2D, cameraX: number, cameraY: number = 0, showDebugBoxes: boolean = false) {
     const drawX = Math.floor(this.x - cameraX);
-    const drawY = Math.floor(this.y);
+    const drawY = Math.floor(this.y - cameraY);
 
     ctx.save();
 

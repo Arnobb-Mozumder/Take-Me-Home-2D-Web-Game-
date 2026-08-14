@@ -4,12 +4,14 @@ export class InputManager {
   private kickRequested = false;
   private aimRequested = false;
   private teleportRequested = false;
+  private recallRequested = false;
   private virtualLeft = false;
   private virtualRight = false;
   private virtualJump = false;
   private virtualKick = false;
   private virtualAim = false;
   private virtualTeleport = false;
+  private virtualRecall = false;
   private virtualUp = false;
   private virtualDown = false;
 
@@ -25,7 +27,7 @@ export class InputManager {
 
   private handleKeyDown = (e: KeyboardEvent) => {
     // Prevent default scrolling for game keys
-    if (['Space', 'ShiftLeft', 'ShiftRight', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyA', 'KeyD', 'KeyW', 'KeyS', 'KeyK', 'KeyF', 'KeyE', 'KeyR', 'KeyQ', 'KeyT'].includes(e.code)) {
+    if (['Space', 'ShiftLeft', 'ShiftRight', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyA', 'KeyD', 'KeyW', 'KeyS', 'KeyK', 'KeyF', 'KeyE', 'KeyR', 'KeyQ', 'KeyT', 'KeyC'].includes(e.code)) {
       if (document.activeElement === document.body || document.activeElement?.tagName === 'CANVAS') {
         e.preventDefault();
       }
@@ -43,6 +45,9 @@ export class InputManager {
       }
       if (e.code === 'KeyQ' || e.code === 'KeyT') {
         this.teleportRequested = true;
+      }
+      if (e.code === 'KeyC') {
+        this.recallRequested = true;
       }
     }
 
@@ -139,6 +144,10 @@ export class InputManager {
     this.teleportRequested = true;
   }
 
+  public triggerVirtualRecall() {
+    this.recallRequested = true;
+  }
+
   // Consume an aim (R key) press request
   public consumeAimRequest(): boolean {
     if (this.aimRequested) {
@@ -148,10 +157,19 @@ export class InputManager {
     return false;
   }
 
-  // Consume a teleport (T key) press request
+  // Consume a teleport (Q/T key) press request
   public consumeTeleportRequest(): boolean {
     if (this.teleportRequested) {
       this.teleportRequested = false;
+      return true;
+    }
+    return false;
+  }
+
+  // Consume a recall (C key) press request
+  public consumeRecallRequest(): boolean {
+    if (this.recallRequested) {
+      this.recallRequested = false;
       return true;
     }
     return false;

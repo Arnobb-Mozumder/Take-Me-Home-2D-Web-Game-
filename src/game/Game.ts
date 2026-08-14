@@ -4,7 +4,8 @@ import { Environment } from './Environment';
 import { Camera } from './Camera';
 import { Physics } from './Physics';
 import { InputManager } from './InputManager';
-import { GameDebugInfo, FootballDebugInfo, EnvironmentDebugInfo, Checkpoint, BreakableWall } from './types';
+import { SaveManager, SavedGameState } from './SaveManager';
+import { GameDebugInfo, FootballDebugInfo, EnvironmentDebugInfo, Checkpoint, BreakableWall, KickDirection } from './types';
 
 export class Game {
   public player: Player;
@@ -22,10 +23,25 @@ export class Game {
   private lastTime = 0;
 
   // Game State Machine & Respawn System
-  public gameState: 'PLAYING' | 'BALL_LOST' | 'PLAYER_DIED' = 'PLAYING';
+  public gameState: 'PLAYING' | 'BALL_LOST' | 'PLAYER_DIED' | 'LEVEL_TRANSITION' = 'PLAYING';
   private respawnTimer = 0;
   private fadeAlpha = 0;
   private activeCheckpoint: Checkpoint;
+
+  // Level Transition
+  public transitionState: 'NONE' | 'FADING_OUT' | 'BLACK_SCREEN' | 'FADING_IN' = 'NONE';
+  public transitionTimer = 0;
+  public transitionTargetLevel = 1;
+  public transitionTitle = '';
+  public transitionSubtitle = '';
+  public chapterBannerTimer = 0;
+
+  // Persistence and Auto-save System
+  private autoSaveTimer = 0;
+  private lastSavedTime = 0;
+  private hasSavedGame = false;
+  private saveToastTimer = 0;
+  private saveToastMessage = '';
 
   // Debug options
   public showDebugBoxes = false;
@@ -36,46 +52,104 @@ export class Game {
   // Callback for debug UI updates
   private onDebugUpdate?: (info: GameDebugInfo) => void;
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, initialWidth: number = 1365, initialHeight: number = 768) {
     this.canvas = canvas;
     const context = canvas.getContext('2d');
     if (!context) throw new Error('Could not get 2D canvas context');
     this.ctx = context;
 
-    // Fixed internal game resolution: 1365 × 768
-    this.canvas.width = 1365;
-    this.canvas.height = 768;
+    // Full screen matching resolution (supports standard/ultrawide/hi-dpi containers)
+    const w = Math.max(800, initialWidth);
+    const h = Math.max(500, initialHeight);
+    this.canvas.width = w;
+    this.canvas.height = h;
     this.ctx.imageSmoothingEnabled = false;
 
     this.physics = new Physics();
     this.environment = new Environment();
-    this.camera = new Camera(1365, 768);
+    this.camera = new Camera(w, h);
     this.input = new InputManager();
     this.player = new Player(this.physics);
 
     // Initial Active Checkpoint
     this.activeCheckpoint = this.environment.checkpoints[0];
 
-    // Spawn football at checkpoint spawn
-    this.football = new Football(
-      this.activeCheckpoint.ballSpawnX,
-      this.activeCheckpoint.ballSpawnY
-    );
-    this.player.reset(
-      this.activeCheckpoint.playerSpawnX,
-      this.activeCheckpoint.playerSpawnY
-    );
+    // Check for existing saved game progress in localStorage
+    const saved = SaveManager.loadGameState();
+    if (saved) {
+      this.hasSavedGame = true;
+      this.lastSavedTime = saved.timestamp;
+
+      // Load saved level if specified
+      if (saved.level && saved.level !== this.environment.currentLevel) {
+        this.environment.loadLevel(saved.level);
+      }
+
+      // Restore active checkpoint
+      const cp = this.environment.checkpoints.find(c => c.id === saved.checkpointId);
+      if (cp) {
+        this.activeCheckpoint = cp;
+        // Mark all checkpoints up to this one as active
+        let reached = false;
+        this.environment.checkpoints.forEach(c => {
+          if (!reached) {
+            c.isActive = true;
+            if (c.id === cp.id) reached = true;
+          }
+        });
+      } else {
+        this.activeCheckpoint = this.environment.checkpoints[0];
+      }
+
+      // Restore broken walls
+      if (Array.isArray(saved.brokenWallIds)) {
+        this.environment.breakableWalls.forEach(wall => {
+          if (saved.brokenWallIds.includes(wall.id)) {
+            wall.isBroken = true;
+          }
+        });
+      }
+
+      // Restore crates
+      if (Array.isArray(saved.crates)) {
+        saved.crates.forEach(sc => {
+          const crate = this.environment.crates.find(c => c.id === sc.id);
+          if (crate) {
+            crate.x = sc.x;
+            crate.y = sc.y;
+          }
+        });
+      }
+
+      // Restore Player and Football positions
+      this.football = new Football(saved.football.x, saved.football.y);
+      this.player.reset(saved.player.x, saved.player.y);
+      this.player.facingRight = saved.player.facingRight;
+      this.player.health = Math.max(1, saved.player.health);
+    } else {
+      // Spawn football at initial checkpoint spawn
+      this.football = new Football(
+        this.activeCheckpoint.ballSpawnX,
+        this.activeCheckpoint.ballSpawnY
+      );
+      this.player.reset(
+        this.activeCheckpoint.playerSpawnX,
+        this.activeCheckpoint.playerSpawnY
+      );
+    }
   }
 
   public setDebugCallback(callback: (info: GameDebugInfo) => void) {
     this.onDebugUpdate = callback;
   }
 
-  public resize() {
-    this.canvas.width = 1365;
-    this.canvas.height = 768;
+  public resize(width?: number, height?: number) {
+    const w = width && width > 0 ? width : this.canvas.clientWidth || 1365;
+    const h = height && height > 0 ? height : this.canvas.clientHeight || 768;
+    this.canvas.width = w;
+    this.canvas.height = h;
     this.ctx.imageSmoothingEnabled = false;
-    this.camera.resize(1365, 768);
+    this.camera.resize(w, h);
   }
 
   public start() {
@@ -99,6 +173,30 @@ export class Game {
     this.input.destroy();
   }
 
+  public startLevelTransition(
+    targetLevel: number,
+    title: string = 'CHAPTER 2: THE JUNGLE RUSH',
+    subtitle: string = 'Entering the Wild Canopy...'
+  ) {
+    if (this.gameState === 'LEVEL_TRANSITION') return;
+
+    this.gameState = 'LEVEL_TRANSITION';
+    this.transitionState = 'FADING_OUT';
+    this.transitionTimer = 0;
+    this.transitionTargetLevel = targetLevel;
+    this.transitionTitle = title;
+    this.transitionSubtitle = subtitle;
+    this.camera.addShake(4, 0.4);
+  }
+
+  public switchLevel(levelNum: number) {
+    this.startLevelTransition(
+      levelNum,
+      levelNum === 2 ? 'CHAPTER 2: THE JUNGLE RUSH' : 'CHAPTER 1: THE SUBURBIA RUN',
+      levelNum === 2 ? 'Entering the Wild Canopy...' : 'Returning to Suburbia...'
+    );
+  }
+
   private triggerBallLost(reason: 'water' | 'thorns' | 'cliff') {
     if (this.gameState !== 'PLAYING') return;
 
@@ -113,7 +211,7 @@ export class Game {
     }
   }
 
-  private triggerPlayerDeath(reason: 'water' | 'thorns' | 'cliff') {
+  private triggerPlayerDeath(reason: 'water' | 'thorns' | 'cliff' | 'dog') {
     if (this.gameState !== 'PLAYING') return;
 
     this.gameState = 'PLAYER_DIED';
@@ -124,6 +222,8 @@ export class Game {
       this.environment.triggerWaterSplash(this.player.x, this.player.y);
     } else if (reason === 'thorns') {
       this.environment.triggerThornPop(this.player.x, this.player.y);
+    } else if (reason === 'dog') {
+      this.environment.triggerImpactDust(this.player.x, this.player.y);
     }
   }
 
@@ -136,6 +236,8 @@ export class Game {
       this.activeCheckpoint.ballSpawnX,
       this.activeCheckpoint.ballSpawnY
     );
+    this.environment.dogs.forEach(d => d.reset());
+    this.environment.healthPotions.forEach(p => p.reset());
     this.gameState = 'PLAYING';
     this.fadeAlpha = 0;
   }
@@ -159,6 +261,9 @@ export class Game {
       // 0. Teleport Input Check
       if (this.input.consumeTeleportRequest()) {
         this.attemptTeleport();
+      }
+      if (this.input.consumeRecallRequest()) {
+        this.recallBall();
       }
 
       // 1. Environment & Objects Update
@@ -212,12 +317,15 @@ export class Game {
             // Shatter Breakable Brick Wall!
             this.environment.shatterWall(wall);
             this.camera.addShake(10, 0.4);
+            // Save state immediately after breaking a wall
+            this.saveGameProgress();
           } else {
             // Low / Medium power kick -> Shake wall & emit impact dust
             wall.shakeTimer = 0.3;
             this.environment.triggerImpactDust(this.football.x, this.football.y);
           }
-        }
+        },
+        this.environment.sandAreas
       );
 
       // 3. Player Physics & Input Update
@@ -226,17 +334,71 @@ export class Game {
         this.input,
         playerPlatforms,
         this.environment.levelWidth,
-        this.football
+        this.football,
+        this.environment.sandAreas
       );
 
-      // 4. Checkpoint Trigger Check
+      // 3.5 Dog Enemies Update, AI State Machine & Damage Interaction
+      if (this.environment.dogs.length > 0) {
+        this.environment.dogs.forEach(dog => {
+          dog.update(
+            dt,
+            this.player,
+            this.football,
+            this.environment.platforms,
+            this.environment.breakableWalls,
+            (defeatedDog) => {
+              this.camera.addShake(7, 0.3);
+              this.environment.triggerImpactDust(
+                defeatedDog.x + defeatedDog.width / 2,
+                defeatedDog.y + defeatedDog.height / 2
+              );
+            }
+          );
+        });
+
+        // Check if player died from dog attacks
+        if (this.player.health <= 0 && this.gameState === 'PLAYING') {
+          this.triggerPlayerDeath('dog');
+        }
+      }
+
+      // 3.6 Health Refill Potions Pickup Update & Collision Detection
+      if (this.environment.healthPotions.length > 0) {
+        this.environment.healthPotions.forEach(potion => {
+          potion.update(
+            dt,
+            this.player,
+            this.football,
+            (collectedPotion) => {
+              this.environment.triggerHealBurst(
+                collectedPotion.x + collectedPotion.width / 2,
+                collectedPotion.y + collectedPotion.height / 2
+              );
+              this.camera.addShake(3, 0.2);
+            }
+          );
+        });
+      }
+
+      // 4. Checkpoint Trigger Check & Auto-Save
       this.environment.checkpoints.forEach(cp => {
         if (!cp.isActive && this.player.x >= cp.x - 20) {
           cp.isActive = true;
           this.activeCheckpoint = cp;
           this.camera.addShake(3, 0.2);
+          this.saveGameProgress(true, `Checkpoint Reached: ${cp.name}! Saved.`);
         }
       });
+
+      // Periodic Background Auto-Save (Every 4 seconds when in stable play state)
+      this.autoSaveTimer += dt;
+      if (this.autoSaveTimer >= 4.0) {
+        this.autoSaveTimer = 0;
+        if (this.player.isGrounded || this.football.isGrounded) {
+          this.saveGameProgress(false);
+        }
+      }
 
       // 5. Check Hazards Intersections
       const playerHazardBox = {
@@ -253,9 +415,17 @@ export class Game {
         height: this.football.radius * 2,
       };
 
-      // Water Hazards Check
+      // 5.1 Check Cave Portals / Tunnel Collision (Level Transition)
+      for (const portal of this.environment.cavePortals) {
+        if (this.physics.checkAABB(playerHazardBox, portal)) {
+          this.startLevelTransition(portal.targetLevel, portal.title, portal.subtitle);
+          break;
+        }
+      }
+
+      // Water Hazards Check (Only trigger ball lost if ball is airborne/submerged, not securely resting on sand/bank)
       for (const water of this.environment.waterZones) {
-        if (this.physics.checkAABB(footBox, water)) {
+        if (!this.football.isGrounded && this.physics.checkAABB(footBox, water)) {
           this.triggerBallLost('water');
           break;
         }
@@ -299,6 +469,48 @@ export class Game {
         this.environment.levelHeight,
         dt
       );
+    } else if (this.gameState === 'LEVEL_TRANSITION') {
+      // Level Transition State Machine
+      this.environment.update(dt);
+      this.transitionTimer += dt;
+
+      if (this.transitionState === 'FADING_OUT') {
+        this.fadeAlpha = Math.min(1, this.transitionTimer / 0.7);
+        if (this.transitionTimer >= 0.7) {
+          this.transitionState = 'BLACK_SCREEN';
+          this.transitionTimer = 0;
+          this.fadeAlpha = 1.0;
+
+          // Swap level data
+          this.environment.loadLevel(this.transitionTargetLevel);
+          this.activeCheckpoint = this.environment.checkpoints[0];
+          this.player.reset(
+            this.activeCheckpoint.playerSpawnX,
+            this.activeCheckpoint.playerSpawnY
+          );
+          this.football.reset(
+            this.activeCheckpoint.ballSpawnX,
+            this.activeCheckpoint.ballSpawnY
+          );
+          this.camera.x = Math.max(0, this.player.x - this.camera.viewWidth * 0.26);
+          this.camera.y = Math.max(-150, this.player.y - this.camera.viewHeight * 0.68);
+          this.saveGameProgress(true, `Entered ${this.transitionTitle}!`);
+        }
+      } else if (this.transitionState === 'BLACK_SCREEN') {
+        // Hold on black screen with cinematic chapter title card
+        if (this.transitionTimer >= 1.2) {
+          this.transitionState = 'FADING_IN';
+          this.transitionTimer = 0;
+          this.chapterBannerTimer = 3.5;
+        }
+      } else if (this.transitionState === 'FADING_IN') {
+        this.fadeAlpha = Math.max(0, 1 - this.transitionTimer / 0.7);
+        if (this.transitionTimer >= 0.7) {
+          this.fadeAlpha = 0;
+          this.transitionState = 'NONE';
+          this.gameState = 'PLAYING';
+        }
+      }
     } else {
       // Game Over / Ball Lost Respawn Animation
       this.respawnTimer -= dt;
@@ -313,6 +525,15 @@ export class Game {
       }
     }
 
+    if (this.chapterBannerTimer > 0) {
+      this.chapterBannerTimer -= dt;
+    }
+
+    // Update Save Toast Timer
+    if (this.saveToastTimer > 0) {
+      this.saveToastTimer -= dt;
+    }
+
     // Render Scene
     this.render();
 
@@ -322,7 +543,18 @@ export class Game {
         player: this.player.getDebugInfo(this.fps),
         football: this.getFootballDebugInfo(),
         environment: this.getEnvironmentDebugInfo(),
+        dogs: this.environment.dogs.map(d => ({
+          id: d.id,
+          state: d.state,
+          health: d.health,
+          maxHealth: d.maxHealth,
+          x: Math.round(d.x),
+          y: Math.round(d.y),
+          distanceToPlayer: Math.round(Math.hypot(this.player.x - d.x, this.player.y - d.y)),
+        })),
         gameState: this.gameState,
+        lastSavedTime: this.lastSavedTime,
+        hasSavedGame: this.hasSavedGame,
       });
     }
 
@@ -379,6 +611,8 @@ export class Game {
     if (this.player.y > 600) cliffStatus = 'FALLING!';
 
     return {
+      currentLevel: this.environment.currentLevel || 1,
+      chapterTitle: this.environment.chapterTitle,
       activeCheckpoint: this.activeCheckpoint.name,
       currentTerrain: this.player.isGrounded ? 'GRASS GROUND' : 'AIRBORNE',
       waterCollision: inWater,
@@ -404,15 +638,52 @@ export class Game {
 
     if (!isAimingOrPower && !canKickPrompt) return;
 
-    const kickDir = this.player.kickStage !== 'NONE' ? this.player.lockedKickDir : this.player.getKickDirection(this.input);
+    const startX = this.football.getCenterX() - this.camera.x;
+    const startY = this.football.getCenterY() - this.camera.y;
+
+    this.ctx.save();
+
+    // 1. When NOT actively aiming with [R] in Tactical Aim Mode:
+    // Only show a short, clean directional axis line from the ball
+    if (!isAimingOrPower) {
+      const kickDir = this.player.getKickDirection(this.input);
+      const powerVec = this.player.getKickVelocityVector(kickDir, 1.0);
+      const speed = Math.hypot(powerVec.vx, powerVec.vy);
+      const dirX = speed > 0 ? powerVec.vx / speed : (this.player.facingRight ? 1 : -1);
+      const dirY = speed > 0 ? powerVec.vy / speed : 0;
+
+      const innerDist = this.football.radius + 2;
+      const outerDist = this.football.radius + 18;
+
+      const p1X = startX + dirX * innerDist;
+      const p1Y = startY + dirY * innerDist;
+      const p2X = startX + dirX * outerDist;
+      const p2Y = startY + dirY * outerDist;
+
+      // Short subtle axis line
+      this.ctx.strokeStyle = 'rgba(56, 189, 248, 0.85)';
+      this.ctx.lineWidth = 2;
+      this.ctx.lineCap = 'round';
+      this.ctx.beginPath();
+      this.ctx.moveTo(p1X, p1Y);
+      this.ctx.lineTo(p2X, p2Y);
+      this.ctx.stroke();
+
+      // Small axis tick point at tip
+      this.ctx.fillStyle = '#38bdf8';
+      this.ctx.beginPath();
+      this.ctx.arc(p2X, p2Y, 1.5, 0, Math.PI * 2);
+      this.ctx.fill();
+
+      this.ctx.restore();
+      return;
+    }
+
+    // 2. TACTICAL PRECISION AIM MODE (When Aiming with [R] or Charging Power)
+    const kickDir = this.player.lockedKickDir;
     const powerVec = this.player.getKickVelocityVector(kickDir, this.player.kickPower);
     const launchSpeed = Math.round(Math.hypot(powerVec.vx, powerVec.vy));
     const powerPct = Math.round(this.player.kickPower * 100);
-
-    const startX = this.football.getCenterX() - this.camera.x;
-    const startY = this.football.getCenterY();
-
-    this.ctx.save();
 
     // 1. DYNAMIC PARABOLIC TRAJECTORY LINE WITH SPEED PROJECTION
     const g = this.football.gravity;
@@ -560,22 +831,29 @@ export class Game {
     const { width } = this.canvas;
     this.ctx.save();
 
-    // Health Hearts in Top Right
+    // Health Hearts in Top Right (4 Hearts = 100 HP, 25 HP each)
     const startX = width - 110;
     const startY = 24;
 
     this.ctx.font = 'bold 12px monospace';
     this.ctx.fillStyle = '#cbd5e1';
-    this.ctx.fillText('HEALTH:', startX - 60, startY + 12);
+    this.ctx.fillText('HEALTH:', startX - 65, startY + 4);
 
-    for (let i = 0; i < this.player.maxHealth; i++) {
+    const totalHearts = 4;
+    for (let i = 0; i < totalHearts; i++) {
       const hX = startX + i * 22;
-      const isFull = i < this.player.health;
+      const heartMinHp = (i + 1) * 25;
+      const isFull = this.player.health >= heartMinHp;
+      const isDamaged = this.player.health > heartMinHp - 25 && this.player.health < heartMinHp;
 
-      this.ctx.fillStyle = isFull ? '#ef4444' : '#475569';
+      this.ctx.fillStyle = isFull ? '#ef4444' : isDamaged ? '#f59e0b' : '#334155';
       this.ctx.beginPath();
       this.ctx.arc(hX, startY, 6, 0, Math.PI * 2);
       this.ctx.fill();
+
+      this.ctx.strokeStyle = '#f87171';
+      this.ctx.lineWidth = 1;
+      this.ctx.stroke();
     }
 
     // Active Checkpoint HUD Indicator (Top Center)
@@ -597,27 +875,188 @@ export class Game {
     this.ctx.textBaseline = 'middle';
     this.ctx.fillText(cpText, width / 2, 25);
 
+    // Auto-Save Toast Floating Pill (Below Checkpoint Banner)
+    if (this.saveToastTimer > 0) {
+      const toastAlpha = Math.min(1, this.saveToastTimer / 0.4);
+      this.ctx.save();
+      this.ctx.globalAlpha = toastAlpha;
+      this.ctx.fillStyle = 'rgba(6, 78, 59, 0.95)';
+      this.ctx.strokeStyle = '#34d399';
+      this.ctx.lineWidth = 1.2;
+
+      this.ctx.font = 'bold 10px monospace';
+      const toastW = this.ctx.measureText(this.saveToastMessage).width + 24;
+      this.ctx.beginPath();
+      this.ctx.roundRect(width / 2 - toastW / 2, 44, toastW, 22, 8);
+      this.ctx.fill();
+      this.ctx.stroke();
+
+      this.ctx.fillStyle = '#a7f3d0';
+      this.ctx.textAlign = 'center';
+      this.ctx.textBaseline = 'middle';
+      this.ctx.fillText(`💾 ${this.saveToastMessage}`, width / 2, 55);
+      this.ctx.restore();
+    }
+
     this.ctx.restore();
   }
 
-  public canTeleportToBall(): { allowed: boolean; reason?: string } {
+  public saveGameProgress(showToast = false, message = 'Game Saved to Storage'): boolean {
+    const brokenWallIds = this.environment.breakableWalls
+      .filter(w => w.isBroken)
+      .map(w => w.id);
+
+    const crates = this.environment.crates.map(c => ({
+      id: c.id,
+      x: Math.round(c.x),
+      y: Math.round(c.y),
+    }));
+
+    const state: SavedGameState = {
+      version: 1,
+      level: this.environment.currentLevel,
+      checkpointId: this.activeCheckpoint.id,
+      checkpointName: this.activeCheckpoint.name,
+      player: {
+        x: Math.round(this.player.x),
+        y: Math.round(this.player.y),
+        health: this.player.health,
+        facingRight: this.player.facingRight,
+      },
+      football: {
+        x: Math.round(this.football.x),
+        y: Math.round(this.football.y),
+      },
+      brokenWallIds,
+      crates,
+      timestamp: Date.now(),
+    };
+
+    const success = SaveManager.saveGameState(state);
+    if (success) {
+      this.lastSavedTime = state.timestamp;
+      this.hasSavedGame = true;
+      if (showToast) {
+        this.saveToastMessage = message;
+        this.saveToastTimer = 2.5;
+      }
+    }
+    return success;
+  }
+
+  public resetGameProgress() {
+    SaveManager.clearGameState();
+    this.hasSavedGame = false;
+    this.startNewGame();
+    this.saveToastMessage = 'Progress Reset to Beginning!';
+    this.saveToastTimer = 2.5;
+  }
+
+  public startNewGame() {
+    this.environment.loadLevel(1);
+    this.activeCheckpoint = this.environment.checkpoints[0];
+    this.environment.checkpoints.forEach((cp, idx) => {
+      cp.isActive = idx === 0;
+    });
+
+    this.player.reset(
+      this.activeCheckpoint.playerSpawnX,
+      this.activeCheckpoint.playerSpawnY
+    );
+    this.player.health = this.player.maxHealth;
+    this.environment.dogs.forEach(d => d.reset());
+
+    this.football.reset(
+      this.activeCheckpoint.ballSpawnX,
+      this.activeCheckpoint.ballSpawnY
+    );
+
+    this.camera.x = Math.max(0, this.player.x - this.camera.viewWidth * 0.26);
+    this.camera.y = Math.max(-150, this.player.y - this.camera.viewHeight * 0.68);
+    this.gameState = 'PLAYING';
+    this.saveToastMessage = 'Started New Game - Chapter 1!';
+    this.saveToastTimer = 2.5;
+  }
+
+  public loadSavedGame(): { success: boolean; message: string } {
+    const saved = SaveManager.loadGameState();
+    if (!saved) {
+      this.startNewGame();
+      return { success: false, message: 'No saved game found! Started New Game.' };
+    }
+
+    this.hasSavedGame = true;
+    this.lastSavedTime = saved.timestamp;
+
+    // Load saved level if specified
+    if (saved.level && saved.level !== this.environment.currentLevel) {
+      this.environment.loadLevel(saved.level);
+    } else {
+      this.environment.resetLevel();
+    }
+
+    // Restore active checkpoint
+    const cp = this.environment.checkpoints.find(c => c.id === saved.checkpointId);
+    if (cp) {
+      this.activeCheckpoint = cp;
+      let reached = false;
+      this.environment.checkpoints.forEach(c => {
+        if (!reached) {
+          c.isActive = true;
+          if (c.id === cp.id) reached = true;
+        }
+      });
+    } else {
+      this.activeCheckpoint = this.environment.checkpoints[0];
+    }
+
+    // Restore broken walls
+    if (Array.isArray(saved.brokenWallIds)) {
+      this.environment.breakableWalls.forEach(wall => {
+        if (saved.brokenWallIds.includes(wall.id)) {
+          wall.isBroken = true;
+        }
+      });
+    }
+
+    // Restore crates
+    if (Array.isArray(saved.crates)) {
+      saved.crates.forEach(sc => {
+        const crate = this.environment.crates.find(c => c.id === sc.id);
+        if (crate) {
+          crate.x = sc.x;
+          crate.y = sc.y;
+        }
+      });
+    }
+
+    // Restore Player and Football positions
+    this.football.reset(saved.football.x, saved.football.y);
+    this.player.reset(saved.player.x, saved.player.y);
+    this.player.facingRight = saved.player.facingRight;
+    this.player.health = Math.max(1, saved.player.health);
+
+    this.camera.x = Math.max(0, this.player.x - this.camera.viewWidth * 0.26);
+    this.camera.y = Math.max(-150, this.player.y - this.camera.viewHeight * 0.68);
+    this.gameState = 'PLAYING';
+    this.saveToastMessage = `Loaded from ${this.activeCheckpoint.name}!`;
+    this.saveToastTimer = 2.5;
+
+    return { success: true, message: `Loaded from ${this.activeCheckpoint.name}` };
+  }
+
+  public canTeleportToBall(): { allowed: boolean; reason?: string; safeX?: number; safeY?: number } {
     // 1. Teleport Cooldown check
     if (this.player.teleportCooldown > 0) {
       return { allowed: false, reason: `TELEPORT COOLDOWN (${this.player.teleportCooldown.toFixed(1)}s)` };
     }
 
-    // 2. Ball Speed check (< 80 px/s)
-    const ballSpeed = Math.hypot(this.football.vx, this.football.vy);
-    if (ballSpeed >= 80) {
-      return { allowed: false, reason: `BALL MOVING TOO FAST (${Math.round(ballSpeed)} px/s >= 80)` };
+    // 2. Ball out of bounds check
+    if (this.football.y > this.environment.deathBoundaryY) {
+      return { allowed: false, reason: 'BALL OUT OF BOUNDS' };
     }
 
-    // 3. Ball on Stable Terrain check
-    if (!this.football.isGrounded && Math.abs(this.football.vy) > 20) {
-      return { allowed: false, reason: 'BALL IS AIRBORNE (MUST BE ON STABLE TERRAIN)' };
-    }
-
-    // 4. Ball in Hazard check
+    // 3. Ball in Hazard check
     const footBox = {
       x: this.football.x,
       y: this.football.y,
@@ -626,7 +1065,7 @@ export class Game {
     };
 
     for (const water of this.environment.waterZones) {
-      if (this.physics.checkAABB(footBox, water)) {
+      if (!this.football.isGrounded && this.physics.checkAABB(footBox, water)) {
         return { allowed: false, reason: 'BALL IS IN WATER HAZARD' };
       }
     }
@@ -637,20 +1076,10 @@ export class Game {
       }
     }
 
-    if (this.football.y > this.environment.deathBoundaryY) {
-      return { allowed: false, reason: 'BALL OUT OF BOUNDS' };
-    }
-
-    // 5. Destination space check (Player must fit in destination space)
+    // 4. Narrow Space Check:
+    // Direct destination is exactly where the ball is
     const targetX = this.football.x + this.football.radius - this.player.width / 2;
     const targetY = this.football.y + this.football.radius * 2 - this.player.height;
-
-    const destPlayerBox = {
-      x: targetX,
-      y: targetY,
-      width: this.player.width,
-      height: this.player.height,
-    };
 
     const wallPlatforms = this.environment.breakableWalls
       .filter(w => !w.isBroken)
@@ -658,13 +1087,18 @@ export class Game {
     const cratePlatforms = this.environment.crates.map(c => c.toPlatform());
     const allPlats = [...this.environment.platforms, ...wallPlatforms, ...cratePlatforms];
 
-    for (const plat of allPlats) {
-      if (this.physics.checkAABB(destPlayerBox, plat)) {
-        return { allowed: false, reason: 'DESTINATION PASSAGE TOO NARROW FOR BOY' };
-      }
+    // Check if the player's full body height cannot fit at the ball location (e.g. narrow chute, tight tunnel ceiling)
+    const isNarrowSpace = allPlats.some(plat => {
+      const overlapX = (targetX + this.player.width > plat.x + 2) && (targetX < plat.x + plat.width - 2);
+      const overlapY = (targetY < plat.y + plat.height - 4) && (targetY + this.player.height > plat.y + 12);
+      return overlapX && overlapY;
+    });
+
+    if (isNarrowSpace) {
+      return { allowed: false, reason: 'NARROW SPACE (CANNOT FIT)' };
     }
 
-    return { allowed: true };
+    return { allowed: true, safeX: targetX, safeY: targetY };
   }
 
   public attemptTeleport() {
@@ -676,8 +1110,14 @@ export class Game {
         this.player.y + this.player.height / 2
       );
 
-      // Perform teleport
-      this.player.teleportToBall(this.football);
+      // Perform teleport to calculated coordinates (works anytime: mid-air, rolling, resting)
+      const destX = check.safeX !== undefined ? check.safeX : (this.football.x + this.football.radius - this.player.width / 2);
+      const destY = check.safeY !== undefined ? check.safeY : (this.football.y + this.football.radius * 2 - this.player.height);
+      const inAir = !this.football.isGrounded;
+      const initialVx = inAir ? this.football.vx * 0.4 : 0;
+      const initialVy = inAir ? Math.min(this.football.vy * 0.4, 80) : 0;
+
+      this.player.teleportTo(destX, destY, inAir, initialVx, initialVy);
 
       // Particle burst at destination player location
       this.environment.spawnTeleportBurst(
@@ -685,8 +1125,8 @@ export class Game {
         this.player.y + this.player.height / 2
       );
 
-      // Set cooldown
-      this.player.teleportCooldown = 0.8;
+      // Quick cooldown
+      this.player.teleportCooldown = 0.25;
 
       // Visual camera shake and floating badge
       this.camera.addShake(4, 0.2);
@@ -697,20 +1137,149 @@ export class Game {
     }
   }
 
+  public recallBall() {
+    if (this.gameState !== 'PLAYING') return;
+
+    // Spawn dust at original ball location
+    this.environment.triggerImpactDust(this.football.x, this.football.y);
+
+    // Reposition ball at player's feet
+    const targetX = this.player.facingRight
+      ? this.player.x + this.player.width + 4
+      : this.player.x - this.football.radius * 2 - 4;
+    const targetY = this.player.y + this.player.height - this.football.radius * 2;
+    this.football.reset(targetX, targetY);
+
+    // Particle burst and feedback
+    this.environment.spawnTeleportBurst(targetX + this.football.radius, targetY + this.football.radius);
+    this.player.showFloatingStatus('BALL RECALLED! ⚽', '#86efac', '#16a34a');
+  }
+
+  public handleCanvasClick(worldX: number, worldY: number) {
+    // 1. If currently dead or ball lost, clicking speeds up / instantly triggers respawn
+    if (this.gameState !== 'PLAYING') {
+      this.respawnTimer = 0;
+      this.respawnAtCheckpoint();
+      return;
+    }
+
+    // 2. If in PLAYING state and player can kick the ball
+    if (this.player.canKickBall(this.football) && this.player.kickCooldown <= 0 && this.player.state !== 'KICK') {
+      const ballCenterX = this.football.getCenterX();
+      const ballCenterY = this.football.getCenterY();
+
+      const dx = worldX - ballCenterX;
+      const dy = worldY - ballCenterY;
+
+      // Face in the direction of the click
+      if (dx >= 0) {
+        this.player.facingRight = true;
+      } else {
+        this.player.facingRight = false;
+      }
+
+      // Determine kick direction from click angle
+      let kickDir: KickDirection = 'FORWARD';
+      if (dy < -60 && Math.abs(dx) < 60) {
+        kickDir = 'UP';
+      } else if (dy < -20) {
+        kickDir = 'FORWARD_UP';
+      } else if (dy > 40) {
+        kickDir = 'FORWARD_DOWN';
+      } else {
+        kickDir = 'FORWARD';
+      }
+
+      this.player.executeKick(kickDir, 0.85);
+    }
+  }
+
   private renderOverlayBanners() {
-    if (this.gameState === 'PLAYING' && this.fadeAlpha === 0) return;
+    if (this.gameState === 'PLAYING' && this.fadeAlpha === 0 && this.chapterBannerTimer <= 0) return;
 
     const { width, height } = this.canvas;
     this.ctx.save();
 
-    // Fade to Black overlay
+    // 1. Fade to Solid Black Overlay
     if (this.fadeAlpha > 0) {
-      this.ctx.fillStyle = `rgba(15, 23, 42, ${this.fadeAlpha})`;
+      this.ctx.fillStyle = `rgba(0, 0, 0, ${this.fadeAlpha})`;
       this.ctx.fillRect(0, 0, width, height);
     }
 
-    // Game Over / Ball Lost Banner Modal
-    if (this.gameState !== 'PLAYING') {
+    // 2. Cinematic Chapter Announcement Card (During black screen or first few seconds of new level)
+    if (this.transitionState === 'BLACK_SCREEN' || this.chapterBannerTimer > 0) {
+      const bannerAlpha = this.transitionState === 'BLACK_SCREEN'
+        ? 1.0
+        : Math.min(1, this.chapterBannerTimer / 0.8);
+
+      this.ctx.save();
+      this.ctx.globalAlpha = bannerAlpha;
+
+      const isJungle = this.environment.currentLevel === 2;
+      const cardW = Math.min(540, width - 40);
+      const cardH = 140;
+      const cardX = width / 2 - cardW / 2;
+      const cardY = height / 2 - cardH / 2;
+
+      // Glow backing
+      this.ctx.shadowColor = isJungle ? 'rgba(74, 222, 128, 0.6)' : 'rgba(56, 189, 248, 0.6)';
+      this.ctx.shadowBlur = 24;
+
+      // Card Background
+      this.ctx.fillStyle = 'rgba(15, 23, 42, 0.96)';
+      this.ctx.strokeStyle = isJungle ? '#4ade80' : '#38bdf8';
+      this.ctx.lineWidth = 2.5;
+
+      this.ctx.beginPath();
+      this.ctx.roundRect(cardX, cardY, cardW, cardH, 16);
+      this.ctx.fill();
+      this.ctx.stroke();
+
+      this.ctx.shadowBlur = 0;
+
+      // Chapter Badge Top
+      this.ctx.font = 'bold 12px monospace';
+      this.ctx.fillStyle = isJungle ? '#86efac' : '#7dd3fc';
+      this.ctx.textAlign = 'center';
+      this.ctx.textBaseline = 'top';
+      this.ctx.fillText(
+        isJungle ? '🌴 CHAPTER 2 UNLOCKED 🌴' : '⚽ CHAPTER 1 ⚽',
+        width / 2,
+        cardY + 20
+      );
+
+      // Chapter Title
+      this.ctx.font = '900 24px system-ui, sans-serif';
+      this.ctx.fillStyle = '#ffffff';
+      this.ctx.fillText(
+        isJungle ? 'THE JUNGLE RUSH' : 'THE SUBURBIA RUN',
+        width / 2,
+        cardY + 44
+      );
+
+      // Chapter Subtitle
+      this.ctx.font = '500 13px system-ui, sans-serif';
+      this.ctx.fillStyle = '#cbd5e1';
+      this.ctx.fillText(
+        isJungle ? 'Navigating the wild ancient jungle canopy & tree roots...' : 'Mastering kicks, passes, and ball control...',
+        width / 2,
+        cardY + 82
+      );
+
+      // Status Pill
+      this.ctx.font = 'bold 11px monospace';
+      this.ctx.fillStyle = isJungle ? '#fde047' : '#93c5fd';
+      this.ctx.fillText(
+        isJungle ? '✦ NEW BIOME LOADED • CANOPY CANOPY RUINS ✦' : '✦ SUBURBAN STREETS & STADIUM ✦',
+        width / 2,
+        cardY + 110
+      );
+
+      this.ctx.restore();
+    }
+
+    // 3. Game Over / Ball Lost Banner Modal
+    if (this.gameState === 'BALL_LOST' || this.gameState === 'PLAYER_DIED') {
       const isBall = this.gameState === 'BALL_LOST';
 
       // Banner Container Card
@@ -757,20 +1326,25 @@ export class Game {
     const { width, height } = this.canvas;
     this.ctx.clearRect(0, 0, width, height);
 
-    // 1. Render Background with 4 Parallax Layers
+    // 1. Render Background with Parallax Layers
     this.environment.renderBackground(this.ctx, this.camera.x, width, height);
 
     // 2. Render Foreground (Platforms, Trees, Water, Thorns, Checkpoints)
-    this.environment.renderForeground(this.ctx, this.camera.x, width);
+    this.environment.renderForeground(this.ctx, this.camera.x, this.camera.y, width, this.showDebugBoxes);
+
+    // 2.5 Render Dog Enemies
+    this.environment.dogs.forEach(dog => {
+      dog.render(this.ctx, this.camera.x, this.camera.y, this.showDebugBoxes);
+    });
 
     // 3. Render Football
-    this.football.render(this.ctx, this.camera.x, this.showDebugBoxes);
+    this.football.render(this.ctx, this.camera.x, this.camera.y, this.showDebugBoxes);
 
     // 4. Render Aiming Indicator when in kick range
     this.renderAimingIndicator();
 
     // 5. Render Player
-    this.player.render(this.ctx, this.camera.x, this.showDebugBoxes);
+    this.player.render(this.ctx, this.camera.x, this.camera.y, this.showDebugBoxes);
 
     // 6. Render HUD (Health & Checkpoint)
     this.renderHUD();
