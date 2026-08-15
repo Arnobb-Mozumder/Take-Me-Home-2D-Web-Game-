@@ -5,6 +5,7 @@ export class InputManager {
   private aimRequested = false;
   private teleportRequested = false;
   private recallRequested = false;
+  private interactRequested = false;
   private virtualLeft = false;
   private virtualRight = false;
   private virtualJump = false;
@@ -39,6 +40,9 @@ export class InputManager {
       }
       if (e.code === 'KeyK' || e.code === 'KeyF' || e.code === 'KeyE' || e.code === 'Space' || e.code === 'Enter') {
         this.kickRequested = true;
+      }
+      if (e.code === 'KeyE' || e.code === 'Enter') {
+        this.interactRequested = true;
       }
       if (e.code === 'KeyR') {
         this.aimRequested = true;
@@ -170,6 +174,15 @@ export class InputManager {
   public consumeRecallRequest(): boolean {
     if (this.recallRequested) {
       this.recallRequested = false;
+      return true;
+    }
+    return false;
+  }
+
+  // Consume an interact (E / Enter key) press request
+  public consumeInteractRequest(): boolean {
+    if (this.interactRequested) {
+      this.interactRequested = false;
       return true;
     }
     return false;

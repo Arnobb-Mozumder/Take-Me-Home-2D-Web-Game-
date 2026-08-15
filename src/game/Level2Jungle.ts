@@ -2,6 +2,8 @@ import { Platform, BreakableWall, WaterZone, ThornHazard, Checkpoint, SandArea, 
 import { Crate } from './Crate';
 import { DogEnemy } from './DogEnemy';
 import { HealthPotion } from './HealthPotion';
+import { StoneGate } from './StoneGate';
+import { Elevator } from './Elevator';
 
 export interface JunglePalm {
   x: number;
@@ -54,6 +56,9 @@ export class Level2Jungle {
     cavePortals: CavePortal[];
     dogs: DogEnemy[];
     healthPotions: HealthPotion[];
+    collectedPotionIds?: string[];
+    stoneGate: StoneGate | null;
+    elevator: Elevator | null;
     junglePalms: JunglePalm[];
     jungleVines: JungleVine[];
     jungleRuins: JungleRuin[];
@@ -62,9 +67,9 @@ export class Level2Jungle {
   }) {
     env.currentLevel = 2;
     env.chapterTitle = 'Chapter 2: The Jungle Rush';
-    env.levelWidth = 8400;
-    env.levelHeight = 768;
-    env.deathBoundaryY = 740;
+    env.levelWidth = 9800;
+    env.levelHeight = 1400;
+    env.deathBoundaryY = 1350;
 
     env.platforms = [];
     env.crates = [];
@@ -76,6 +81,8 @@ export class Level2Jungle {
     env.cavePortals = [];
     env.dogs = [];
     env.healthPotions = [];
+    env.stoneGate = new StoneGate(8200, 110, 70, 240);
+    env.elevator = new Elevator(7920, 110, 1020);
     env.junglePalms = [];
     env.jungleVines = [];
     env.jungleRuins = [];
@@ -84,19 +91,16 @@ export class Level2Jungle {
     // =========================================================
     // SPAWN SLEEPING DOG ENEMIES (Independent AI Instances)
     // =========================================================
-    // Dog 1: Jungle Threshold / Canopy Entrance Patrol
-    env.dogs.push(new DogEnemy('jungle-dog-1', 920, 526));
+    // Dog 1: Overgrown Ruins Guard (Introduced AFTER breaking jungle-wall-1 at x:1560)
+    env.dogs.push(new DogEnemy('jungle-dog-ruins-1', 1740, 526));
 
-    // Dog 2: Overgrown Ruins Guard
-    env.dogs.push(new DogEnemy('jungle-dog-2', 1720, 526));
+    // Dog 2: River Outpost Guard
+    env.dogs.push(new DogEnemy('jungle-dog-river', 3850, 526));
 
-    // Dog 3: River Outpost Guard
-    env.dogs.push(new DogEnemy('jungle-dog-3', 3850, 526));
+    // Dog 3: Canopy Approach Guard
+    env.dogs.push(new DogEnemy('jungle-dog-canopy', 4520, 526));
 
-    // Dog 4: Canopy Approach Guard
-    env.dogs.push(new DogEnemy('jungle-dog-4', 4520, 526));
-
-    // Dogs 5 & 6: Summit Arena Guardians (2 Dogs Together to fight after Ascent!)
+    // Dogs 4 & 5: Summit Arena Guardians (2 Dogs Together to fight after Ascent!)
     env.dogs.push(new DogEnemy('jungle-dog-summit-1', 7180, 66));
     env.dogs.push(new DogEnemy('jungle-dog-summit-2', 7340, 66));
 
@@ -113,6 +117,7 @@ export class Level2Jungle {
       title: 'CHAPTER 1: THE SUBURBIA RUN',
       subtitle: 'Returning to the Suburbia Grounds...',
       signText: 'MOUNTAIN TUNNEL ➔ CHAPTER 1',
+      spawnAtEnd: true,
     });
 
     // =========================================================
@@ -444,14 +449,28 @@ export class Level2Jungle {
     });
 
     // =========================================================
-    // ZONE 6: ANCIENT SUMMIT PLATEAU (6680 to 8400)
-    // Big high ground after highest platform with 2 Dogs fighting together!
+    // ZONE 6: ANCIENT SUMMIT PLATEAU (6680 to 8200)
+    // Surface Summit with 2 Dogs fighting together!
+    // At X: 7920 -> Underground Elevator
+    // At X: 8200 -> Ancient Stone Gate (blocks surface progression)
     // =========================================================
     env.platforms.push({
       id: 'jungle-summit-ground',
       x: 6680,
       y: 110,
-      width: 1720,
+      width: 1520, // 6680 to 8200 (Stone Gate at 8200)
+      height: 658,
+      type: 'ground',
+      color: '#24140b',
+      topColor: '#15803d',
+    });
+
+    // Surface Terrain beyond Stone Gate (Post-Boss Area)
+    env.platforms.push({
+      id: 'jungle-summit-beyond-gate',
+      x: 8270,
+      y: 110,
+      width: 1530,
       height: 658,
       type: 'ground',
       color: '#24140b',
@@ -470,6 +489,150 @@ export class Level2Jungle {
       playerSpawnY: 14,
       ballSpawnX: 6860,
       ballSpawnY: 78,
+      isActive: false,
+    });
+
+    // =========================================================
+    // ZONE 7: SUBTERRANEAN CATACOMBS & RATKEEPER'S LAIR (7800 to 9800, Y: 1020)
+    // Reached exclusively via the Underground Elevator at X: 7920!
+    // =========================================================
+
+    // 1. Elevator Landing Shaft Floor & Enclosing Wall
+    env.platforms.push({
+      id: 'jungle-underground-landing',
+      x: 7840,
+      y: 1020,
+      width: 230,
+      height: 380,
+      type: 'ground',
+      color: '#0f172a',
+      topColor: '#334155',
+    });
+
+    env.platforms.push({
+      id: 'jungle-underground-left-wall',
+      x: 7820,
+      y: 780,
+      width: 30,
+      height: 620,
+      type: 'wall',
+      color: '#0f172a',
+      topColor: '#1e293b',
+    });
+
+    // 2. Narrow Claustrophobic Corridor (X: 8070 to 8400)
+    // Floor: Y=1020, Ceiling: Y=780 (height 135px -> bottom of ceiling is Y=915)
+    // Clearance: 105px, precisely calibrated for 96px player
+    env.platforms.push({
+      id: 'jungle-underground-tunnel-floor',
+      x: 8070,
+      y: 1020,
+      width: 330,
+      height: 380,
+      type: 'ground',
+      color: '#0f172a',
+      topColor: '#334155',
+    });
+
+    env.platforms.push({
+      id: 'jungle-underground-tunnel-ceiling',
+      x: 8070,
+      y: 780,
+      width: 330,
+      height: 135,
+      type: 'ground',
+      color: '#020617',
+      topColor: '#1e293b',
+    });
+
+    // 3. Health Potion Station inside Narrow Tunnel Alcove (Non-respawning when collected)
+    if (!env.collectedPotionIds?.includes('jungle-potion-ratkeeper-antechamber')) {
+      env.healthPotions.push(
+        new HealthPotion('jungle-potion-ratkeeper-antechamber', 8230, 975, 100, 32, 42)
+      );
+    }
+
+    // 4. Boss Arena Floor & Vaulted High Cavern Ceiling (X: 8400 to 9800)
+    env.platforms.push({
+      id: 'jungle-boss-arena-floor',
+      x: 8400,
+      y: 1020,
+      width: 1400,
+      height: 380,
+      type: 'ground',
+      color: '#0f172a',
+      topColor: '#334155',
+    });
+
+    env.platforms.push({
+      id: 'jungle-boss-arena-ceiling',
+      x: 8400,
+      y: 520,
+      width: 1400,
+      height: 140,
+      type: 'ground',
+      color: '#020617',
+      topColor: '#1e293b',
+    });
+
+    // Right Boundary Wall of Boss Arena
+    env.platforms.push({
+      id: 'jungle-boss-arena-right-wall',
+      x: 9760,
+      y: 520,
+      width: 40,
+      height: 880,
+      type: 'wall',
+      color: '#0f172a',
+      topColor: '#1e293b',
+    });
+
+    // 5. Boss Arena Stepping Platforms & Elevated Rocky Altars
+    env.platforms.push({
+      id: 'jungle-boss-perch-1',
+      x: 8620,
+      y: 890,
+      width: 130,
+      height: 20,
+      type: 'platform',
+      color: '#1e293b',
+      topColor: '#475569',
+    });
+
+    env.platforms.push({
+      id: 'jungle-boss-altar',
+      x: 8950,
+      y: 770,
+      width: 190,
+      height: 24,
+      type: 'platform',
+      color: '#1e293b',
+      topColor: '#475569',
+    });
+
+    env.platforms.push({
+      id: 'jungle-boss-perch-2',
+      x: 9340,
+      y: 890,
+      width: 130,
+      height: 20,
+      type: 'platform',
+      color: '#1e293b',
+      topColor: '#475569',
+    });
+
+    // 6. Checkpoint 6: Ratkeeper's Catacombs (Boss Antechamber)
+    env.checkpoints.push({
+      id: 'jungle-cp-ratkeeper-antechamber',
+      name: "Ratkeeper's Catacombs",
+      x: 8400,
+      y: 1020,
+      width: 32,
+      height: 60,
+      playerSpawnX: 8430,
+      playerSpawnY: 924, // On subterranean floor Y=1020
+      ballSpawnX: 8500,
+      ballSpawnY: 988,
       isActive: false,
     });
 
@@ -633,7 +796,7 @@ export class Level2Jungle {
     // 2.5. Zone 5 Ascent Guide Signpost (X: 5220) & Zone 6 Summit Arena Signpost (X: 6780)
     this.drawAscentGuideSign(ctx, cameraX, cameraY);
     this.drawSummitArenaSign(ctx, cameraX, cameraY);
-    this.drawSummitGoalShrine(ctx, cameraX, cameraY);
+    this.drawSubterraneanAtmosphere(ctx, cameraX, cameraY);
 
     // 3. Ancient Monoliths & Totem Ruins
     jungleRuins.forEach(ruin => {
@@ -959,74 +1122,135 @@ export class Level2Jungle {
     }
   }
 
-  private static drawSummitGoalShrine(ctx: CanvasRenderingContext2D, cameraX: number, cameraY: number) {
-    const shrineX = 8180 - cameraX;
-    const groundY = 110 - cameraY;
+  private static drawSubterraneanAtmosphere(ctx: CanvasRenderingContext2D, cameraX: number, cameraY: number) {
+    const now = performance.now();
 
-    if (shrineX > -150 && shrineX < 1365 + 150) {
+    // 1. Subterranean Narrow Tunnel Torches & Crystals (X: 8070 to 8400, Y: 780 to 1020)
+    for (let tx = 8120; tx <= 8360; tx += 80) {
+      const drawX = tx - cameraX;
+      const torchY = 860 - cameraY;
+      if (drawX > -50 && drawX < 1365 + 50) {
+        ctx.save();
+        // Torch Sconce
+        ctx.fillStyle = '#64748b';
+        ctx.fillRect(drawX - 3, torchY, 6, 18);
+        ctx.fillStyle = '#334155';
+        ctx.fillRect(drawX - 6, torchY + 4, 12, 5);
+
+        // Torch Flame Flicker
+        const flicker = Math.sin(now * 0.01 + tx) * 2;
+        ctx.fillStyle = '#f97316';
+        ctx.beginPath();
+        ctx.ellipse(drawX, torchY - 6 + flicker * 0.5, 5 + flicker * 0.5, 9 + flicker, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#fef08a';
+        ctx.beginPath();
+        ctx.ellipse(drawX, torchY - 4 + flicker * 0.3, 2.5, 5, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Warm radial light
+        const glow = ctx.createRadialGradient(drawX, torchY - 6, 2, drawX, torchY - 6, 48);
+        glow.addColorStop(0, 'rgba(249, 115, 22, 0.25)');
+        glow.addColorStop(1, 'rgba(249, 115, 22, 0)');
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(drawX, torchY - 6, 48, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+      }
+    }
+
+    // 2. Boss Arena Archway Banner & Glowing Crystals (X: 8400 to 9800)
+    const arenaBannerX = 8480 - cameraX;
+    const arenaBannerY = 660 - cameraY;
+    if (arenaBannerX > -300 && arenaBannerX < 1365 + 300) {
       ctx.save();
 
-      // Ancient Stone Pedestal
-      ctx.fillStyle = '#334155';
-      ctx.fillRect(shrineX - 25, groundY - 30, 90, 30);
-      ctx.fillStyle = '#1e293b';
-      ctx.fillRect(shrineX - 15, groundY - 50, 70, 20);
+      // Stone Plaque Arch Header
+      ctx.fillStyle = '#090d16';
+      ctx.fillRect(arenaBannerX - 60, arenaBannerY - 26, 280, 48);
+      ctx.strokeStyle = '#6366f1';
+      ctx.lineWidth = 2.5;
+      ctx.strokeRect(arenaBannerX - 60, arenaBannerY - 26, 280, 48);
 
-      // Golden Tropical Trophy Cup
-      const now = performance.now();
-      const floatY = Math.sin(now * 0.003) * 6;
-      const cupY = groundY - 75 + floatY;
-
-      // Glow aura
-      const glow = ctx.createRadialGradient(shrineX + 20, cupY, 5, shrineX + 20, cupY, 45);
-      glow.addColorStop(0, 'rgba(250, 204, 21, 0.6)');
-      glow.addColorStop(1, 'rgba(250, 204, 21, 0)');
-      ctx.fillStyle = glow;
-      ctx.beginPath();
-      ctx.arc(shrineX + 20, cupY, 45, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Trophy base
-      ctx.fillStyle = '#eab308';
-      ctx.fillRect(shrineX + 10, cupY + 12, 20, 8);
-      ctx.fillRect(shrineX + 16, cupY + 2, 8, 10);
-
-      // Trophy Cup
-      ctx.beginPath();
-      ctx.moveTo(shrineX + 4, cupY - 14);
-      ctx.lineTo(shrineX + 36, cupY - 14);
-      ctx.lineTo(shrineX + 28, cupY + 2);
-      ctx.lineTo(shrineX + 12, cupY + 2);
-      ctx.closePath();
-      ctx.fillStyle = '#facc15';
-      ctx.fill();
-      ctx.strokeStyle = '#ca8a04';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-
-      // Handles
-      ctx.strokeStyle = '#facc15';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(shrineX + 3, cupY - 6, 6, Math.PI * 0.5, Math.PI * 1.5);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(shrineX + 37, cupY - 6, 6, -Math.PI * 0.5, Math.PI * 0.5);
-      ctx.stroke();
-
-      // Banner Label
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(shrineX - 25, groundY - 120, 90, 22);
-      ctx.strokeStyle = '#facc15';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(shrineX - 25, groundY - 120, 90, 22);
-
-      ctx.fillStyle = '#fef08a';
-      ctx.font = 'bold 9px system-ui, sans-serif';
+      // Glowing Runes Title
+      ctx.fillStyle = '#a5b4fc';
+      ctx.font = 'bold 12px system-ui, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('🏆 CHAPTER 2 GOAL', shrineX + 20, groundY - 105);
+      ctx.fillText('⚔️ THE RATKEEPER\'S CATACOMBS ⚔️', arenaBannerX + 80, arenaBannerY);
+
+      ctx.fillStyle = '#cbd5e1';
+      ctx.font = '9px monospace';
+      ctx.fillText('ANCIENT SUBTERRANEAN AMPHITHEATER', arenaBannerX + 80, arenaBannerY + 14);
 
       ctx.restore();
+    }
+
+    // 3. Bioluminescent Crystal Formations along Boss Arena Floor & Altar
+    const crystalSpots = [
+      { x: 8460, y: 1020, color: '#c084fc', size: 16 },
+      { x: 8780, y: 1020, color: '#38bdf8', size: 20 },
+      { x: 8990, y: 770, color: '#a855f7', size: 24 }, // On top altar
+      { x: 9180, y: 1020, color: '#38bdf8', size: 18 },
+      { x: 9550, y: 1020, color: '#c084fc', size: 22 },
+      { x: 9700, y: 1020, color: '#f43f5e', size: 16 },
+    ];
+
+    crystalSpots.forEach(c => {
+      const cx = c.x - cameraX;
+      const cy = c.y - cameraY;
+      if (cx > -50 && cx < 1365 + 50) {
+        ctx.save();
+        const pulse = Math.sin(now * 0.003 + c.x) * 0.2 + 0.8;
+
+        // Radial Glow
+        const rad = ctx.createRadialGradient(cx, cy - c.size * 0.5, 2, cx, cy - c.size * 0.5, c.size * 2);
+        rad.addColorStop(0, c.color.replace(')', ', 0.35)').replace('rgb', 'rgba').replace('#', 'rgba('));
+        rad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+        // Crystal Spikes
+        ctx.fillStyle = c.color;
+        ctx.globalAlpha = pulse;
+        ctx.beginPath();
+        ctx.moveTo(cx - c.size * 0.4, cy);
+        ctx.lineTo(cx, cy - c.size);
+        ctx.lineTo(cx + c.size * 0.4, cy);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.moveTo(cx - c.size * 0.6, cy);
+        ctx.lineTo(cx - c.size * 0.2, cy - c.size * 0.7);
+        ctx.lineTo(cx, cy);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(cx + c.size * 0.3, cy - c.size * 0.75);
+        ctx.lineTo(cx + c.size * 0.7, cy);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.restore();
+      }
+    });
+
+    // 4. Dripping Water Droplets from Underground Ceiling (Y: 520 to 1020)
+    for (let dropX = 8550; dropX <= 9650; dropX += 180) {
+      const dx = dropX - cameraX;
+      if (dx > -20 && dx < 1365 + 20) {
+        const cycle = ((now * 0.25 + dropX * 3) % 1500) / 1500;
+        const dy = 520 + cycle * 500 - cameraY;
+        if (dy < 1020 - cameraY) {
+          ctx.fillStyle = 'rgba(147, 197, 253, 0.65)';
+          ctx.beginPath();
+          ctx.arc(dx, dy, 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
     }
   }
 }

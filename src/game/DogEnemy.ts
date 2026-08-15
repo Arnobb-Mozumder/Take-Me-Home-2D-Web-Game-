@@ -1,7 +1,9 @@
 import { Platform, Rect, BreakableWall } from './types';
 import { Player } from './Player';
 import { Football } from './Football';
+import { Crate } from './Crate';
 import { DOG_CONFIG, DogState } from './DogConfig';
+import { SaveManager, DogSpriteType } from './SaveManager';
 
 interface FrameCrop {
   sx: number;
@@ -35,6 +37,13 @@ export class DogEnemy {
   public attackCooldownTimer = 0;
   public damageCooldownTimer = 0;
   public deathTimer = 0;
+  public growlSoundTimer = 0;
+
+  // Obstacle & Blockage State
+  public isBlockedByObstacle = false;
+  public unreachableTimer = 0;
+  public pacingTimer = 0;
+  public pacingDir = 1;
 
   // Animation State
   public animTime = 0;
@@ -48,103 +57,178 @@ export class DogEnemy {
   public spriteOffsetX = DOG_CONFIG.SPRITE_OFFSET_X;
   public spriteOffsetY = DOG_CONFIG.SPRITE_OFFSET_Y;
 
-  // Sprite Image Assets
-  private images: { [key: string]: HTMLImageElement } = {};
-  private loaded: { [key: string]: boolean } = {};
+  // Global Shared Sprite Image Assets & Loading Status Cache
+  private static globalImages: { [key: string]: HTMLImageElement } = {};
+  private static globalLoaded: { [key: string]: boolean } = {};
+  private static isInitialized = false;
 
-  // Precise frame definitions for all animations
-  private frameDefs: { [key: string]: FrameCrop[] } = {
+  // Precise frame definitions for all standard animations
+  private static defaultFrameDefs: { [key: string]: FrameCrop[] } = {
     sleep: [
-      { sx: 48, sy: 212, sw: 470, sh: 310 },
+      { sx: 48, sy: 212, sw: 466, sh: 310 },
       { sx: 587, sy: 212, sw: 471, sh: 310 },
       { sx: 1115, sy: 212, sw: 493, sh: 310 },
       { sx: 1681, sy: 212, sw: 450, sh: 310 },
     ],
     wakeup: [
-      { sx: 48, sy: 212, sw: 470, sh: 310 },
+      { sx: 48, sy: 212, sw: 466, sh: 310 },
       { sx: 587, sy: 212, sw: 471, sh: 310 },
       { sx: 1115, sy: 212, sw: 493, sh: 310 },
       { sx: 1681, sy: 212, sw: 450, sh: 310 },
     ],
     alert: [
-      { sx: 18, sy: 236, sw: 525, sh: 322 },
-      { sx: 543, sy: 236, sw: 543, sh: 322 },
-      { sx: 1086, sy: 236, sw: 543, sh: 322 },
-      { sx: 1629, sy: 236, sw: 511, sh: 322 },
+      { sx: 18, sy: 236, sw: 348, sh: 322 },
+      { sx: 389, sy: 236, sw: 339, sh: 322 },
+      { sx: 753, sy: 236, sw: 325, sh: 322 },
+      { sx: 1091, sy: 236, sw: 334, sh: 322 },
+      { sx: 1442, sy: 236, sw: 368, sh: 322 },
+      { sx: 1812, sy: 236, sw: 328, sh: 322 },
     ],
     run: [
       { sx: 30, sy: 27, sw: 466, sh: 322 },
-      { sx: 542, sy: 111, sw: 497, sh: 245 },
-      { sx: 1039, sy: 98, sw: 520, sh: 224 },
-      { sx: 1559, sy: 91, sw: 501, sh: 262 },
+      { sx: 542, sy: 91, sw: 470, sh: 265 },
+      { sx: 1036, sy: 91, sw: 525, sh: 265 },
+      { sx: 1589, sy: 91, sw: 471, sh: 265 },
       { sx: 15, sy: 391, sw: 460, sh: 309 },
-      { sx: 537, sy: 434, sw: 476, sh: 240 },
-      { sx: 1041, sy: 431, sw: 514, sh: 225 },
+      { sx: 537, sy: 413, sw: 476, sh: 287 },
+      { sx: 1041, sy: 413, sw: 514, sh: 287 },
       { sx: 1581, sy: 413, sw: 481, sh: 287 },
     ],
     bite: [
-      { sx: 12, sy: 198, sw: 431, sh: 243 },
-      { sx: 443, sy: 239, sw: 444, sh: 204 },
-      { sx: 887, sy: 206, sw: 443, sh: 237 },
-      { sx: 1330, sy: 173, sw: 438, sh: 270 },
-      { sx: 10, sy: 555, sw: 433, sh: 236 },
-      { sx: 443, sy: 443, sw: 444, sh: 356 },
-      { sx: 887, sy: 548, sw: 443, sh: 252 },
-      { sx: 1330, sy: 443, sw: 437, sh: 357 },
+      { sx: 12, sy: 173, sw: 215, sh: 270 },
+      { sx: 235, sy: 173, sw: 228, sh: 270 },
+      { sx: 465, sy: 173, sw: 215, sh: 270 },
+      { sx: 675, sy: 173, sw: 220, sh: 270 },
+      { sx: 882, sy: 173, sw: 220, sh: 270 },
+      { sx: 1084, sy: 173, sw: 235, sh: 270 },
+      { sx: 1325, sy: 173, sw: 228, sh: 270 },
+      { sx: 1555, sy: 173, sw: 215, sh: 270 },
+      { sx: 10, sy: 545, sw: 224, sh: 255 },
+      { sx: 229, sy: 545, sw: 227, sh: 255 },
+      { sx: 460, sy: 545, sw: 225, sh: 255 },
+      { sx: 682, sy: 545, sw: 220, sh: 255 },
+      { sx: 908, sy: 545, sw: 205, sh: 255 },
+      { sx: 1116, sy: 545, sw: 225, sh: 255 },
+      { sx: 1342, sy: 545, sw: 210, sh: 255 },
+      { sx: 1555, sy: 545, sw: 212, sh: 255 },
     ],
     damage: [
-      { sx: 19, sy: 166, sw: 347, sh: 277 },
+      { sx: 17, sy: 143, sw: 350, sh: 300 },
       { sx: 572, sy: 143, sw: 298, sh: 300 },
-      { sx: 906, sy: 172, sw: 411, sh: 271 },
-      { sx: 1354, sy: 310, sw: 397, sh: 133 },
-      { sx: 17, sy: 443, sw: 423, sh: 368 },
-      { sx: 477, sy: 443, sw: 393, sh: 361 },
-      { sx: 909, sy: 443, sw: 390, sh: 374 },
-      { sx: 1349, sy: 443, sw: 399, sh: 374 },
+      { sx: 906, sy: 143, sw: 411, sh: 300 },
+      { sx: 1354, sy: 143, sw: 397, sh: 300 },
+      { sx: 17, sy: 500, sw: 423, sh: 320 },
+      { sx: 477, sy: 500, sw: 390, sh: 320 },
+      { sx: 909, sy: 500, sw: 390, sh: 320 },
+      { sx: 1349, sy: 500, sw: 385, sh: 320 },
     ],
     enemy: [{ sx: 149, sy: 247, sw: 1248, sh: 544 }],
   };
 
-  constructor(id: string, spawnX: number, spawnY: number) {
+  public static initAssetCache() {
+    if (DogEnemy.isInitialized) return;
+    DogEnemy.isInitialized = true;
+
+    const base = import.meta.env.BASE_URL || '/';
+    const cleanBase = base.replace(/\/+$/, '');
+
+    const assetList: { key: string; saveKey: DogSpriteType; defaultSrc: string }[] = [
+      { key: 'sleep', saveKey: 'dog_sleep', defaultSrc: `${cleanBase}/dog_sleep.png` },
+      { key: 'wakeup', saveKey: 'dog_wakeup', defaultSrc: `${cleanBase}/dog_wakeup.png` },
+      { key: 'alert', saveKey: 'dog_alert', defaultSrc: `${cleanBase}/dog_alert.png` },
+      { key: 'run', saveKey: 'dog_run', defaultSrc: `${cleanBase}/dog_run.png` },
+      { key: 'bite', saveKey: 'dog_bite', defaultSrc: `${cleanBase}/dog_bite.png` },
+      { key: 'damage', saveKey: 'dog_damage', defaultSrc: `${cleanBase}/dog_damage.png` },
+      { key: 'enemy', saveKey: 'dog_enemy', defaultSrc: `${cleanBase}/dog_enemy.png` },
+    ];
+
+    assetList.forEach(item => {
+      DogEnemy.loadSingleAsset(item.key, item.saveKey, item.defaultSrc);
+    });
+
+    // Listen for real-time SaveManager updates
+    SaveManager.addSpriteChangeListener((type) => {
+      if (type.startsWith('dog_')) {
+        const item = assetList.find(a => a.saveKey === type);
+        if (item) {
+          DogEnemy.loadSingleAsset(item.key, item.saveKey, item.defaultSrc);
+        }
+      }
+    });
+  }
+
+  private static loadSingleAsset(key: string, saveKey: DogSpriteType, defaultSrc: string) {
+    const saved = SaveManager.getSavedSprite(saveKey);
+    const src = saved?.dataUrl || defaultSrc;
+
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      DogEnemy.globalImages[key] = img;
+      DogEnemy.globalLoaded[key] = true;
+    };
+    img.onerror = () => {
+      // If custom failed or default wakeup failed, fallback gracefully
+      if (saved?.dataUrl) {
+        console.warn(`Saved sprite ${saveKey} failed to load, falling back to default.`);
+        DogEnemy.globalLoaded[key] = false;
+        // Retry with default
+        const defImg = new Image();
+        defImg.crossOrigin = 'anonymous';
+        defImg.onload = () => {
+          DogEnemy.globalImages[key] = defImg;
+          DogEnemy.globalLoaded[key] = true;
+        };
+        defImg.src = defaultSrc;
+      } else if (key === 'wakeup') {
+        DogEnemy.globalImages[key] = DogEnemy.globalImages['sleep'];
+        DogEnemy.globalLoaded[key] = true;
+      }
+    };
+    img.src = src;
+    DogEnemy.globalImages[key] = img;
+  }
+
+  public static getLoadedImage(key: string): HTMLImageElement | null {
+    const img = DogEnemy.globalImages[key] || DogEnemy.globalImages['enemy'];
+    if (img && img.complete && img.naturalWidth > 0) {
+      return img;
+    }
+    return null;
+  }
+
+  public isBoss: boolean = false;
+  public bossTitle: string = '';
+
+  constructor(
+    id: string,
+    spawnX: number,
+    spawnY: number,
+    customMaxHealth?: number,
+    isBoss: boolean = false,
+    bossTitle: string = ''
+  ) {
     this.id = id;
     this.spawnX = spawnX;
     this.spawnY = spawnY;
     this.x = spawnX;
     this.y = spawnY;
+    this.isBoss = isBoss;
+    this.bossTitle = bossTitle;
 
-    this.preloadAssets();
-  }
+    if (customMaxHealth) {
+      this.maxHealth = customMaxHealth;
+      this.health = customMaxHealth;
+    }
 
-  private preloadAssets() {
-    const base = import.meta.env.BASE_URL || '/';
-    const cleanBase = base.replace(/\/+$/, '');
+    if (isBoss) {
+      this.width = Math.round(DOG_CONFIG.HITBOX_WIDTH * 1.32);
+      this.height = Math.round(DOG_CONFIG.HITBOX_HEIGHT * 1.32);
+      this.renderWidth = Math.round(DOG_CONFIG.RENDER_WIDTH * 1.32);
+      this.renderHeight = Math.round(DOG_CONFIG.RENDER_HEIGHT * 1.32);
+    }
 
-    const assetList = [
-      { key: 'sleep', src: `${cleanBase}/dog_sleep.png` },
-      { key: 'wakeup', src: `${cleanBase}/dog_wakeup.png` },
-      { key: 'alert', src: `${cleanBase}/dog_alert.png` },
-      { key: 'run', src: `${cleanBase}/dog_run.png` },
-      { key: 'bite', src: `${cleanBase}/dog_bite.png` },
-      { key: 'damage', src: `${cleanBase}/dog_damage.png` },
-      { key: 'enemy', src: `${cleanBase}/dog_enemy.png` },
-    ];
-
-    assetList.forEach(item => {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => {
-        this.loaded[item.key] = true;
-      };
-      img.onerror = () => {
-        // Fallback to sleep or alert if wakeup/etc is missing
-        if (item.key === 'wakeup') {
-          this.images[item.key] = this.images['sleep'];
-          this.loaded[item.key] = true;
-        }
-      };
-      img.src = item.src;
-      this.images[item.key] = img;
-    });
+    DogEnemy.initAssetCache();
   }
 
   public reset() {
@@ -159,6 +243,11 @@ export class DogEnemy {
     this.attackCooldownTimer = 0;
     this.damageCooldownTimer = 0;
     this.deathTimer = 0;
+    this.growlSoundTimer = 0;
+    this.isBlockedByObstacle = false;
+    this.unreachableTimer = 0;
+    this.pacingTimer = 0;
+    this.pacingDir = 1;
     this.animTime = 0;
     this.currentFrame = 0;
     this.hasDealtBiteDamage = false;
@@ -228,9 +317,20 @@ export class DogEnemy {
     football: Football,
     platforms: Platform[],
     breakableWalls: BreakableWall[] = [],
+    cratesOrOnDefeated?: Crate[] | ((dog: DogEnemy) => void),
     onDefeated?: (dog: DogEnemy) => void
   ) {
     if (this.isDefeated) return;
+
+    let crates: Crate[] = [];
+    let onDefeatedCallback = onDefeated;
+
+    if (typeof cratesOrOnDefeated === 'function') {
+      onDefeatedCallback = cratesOrOnDefeated;
+      crates = [];
+    } else if (Array.isArray(cratesOrOnDefeated)) {
+      crates = cratesOrOnDefeated;
+    }
 
     // 1. Decrement active cooldown timers
     if (this.damageCooldownTimer > 0) {
@@ -254,8 +354,25 @@ export class DogEnemy {
     const distanceToPlayer = Math.hypot(dx, dy);
     const distanceFromSpawn = Math.abs(this.x - this.spawnX);
 
-    // Check if player is on an elevated platform that the dog cannot physically reach
-    const isPlayerElevatedUnreachable = player.y < this.y - 110;
+    // Collect solid obstacle bounding boxes (crates, breakable walls, static walls)
+    const solidObstacles = this.getSolidObstacles(platforms, breakableWalls, crates);
+
+    // Check if player is on an elevated platform/crate or high above dog
+    const playerFeetY = player.y + player.height;
+    const dogFeetY = this.y + this.height;
+    const isPlayerElevatedUnreachable =
+      (dogFeetY - playerFeetY > 38) ||
+      (playerFeetY - dogFeetY > 80) ||
+      (player.y < this.y - 60);
+
+    // Check if path is blocked by solid obstacle/wall/crate
+    const isObstacleBlocked = this.checkIsPathBlocked(dx, player, solidObstacles);
+    const isUnreachable = isPlayerElevatedUnreachable || isObstacleBlocked;
+
+    // Check if player is too far away from dog territory
+    const isPlayerTooFar =
+      distanceToPlayer > DOG_CONFIG.DETECTION_RANGE * 1.35 ||
+      distanceFromSpawn > DOG_CONFIG.MAX_CHASE_DISTANCE;
 
     // ============================================================
     // STATE MACHINE TRANSITIONS (Priority: DEAD > DAMAGED > ...)
@@ -270,7 +387,7 @@ export class DogEnemy {
         this.deathTimer += dt;
         if (this.deathTimer >= DOG_CONFIG.DEATH_FADE_DURATION) {
           this.isDefeated = true;
-          if (onDefeated) onDefeated(this);
+          if (onDefeatedCallback) onDefeatedCallback(this);
         }
         break;
       }
@@ -280,7 +397,7 @@ export class DogEnemy {
       // ------------------------------------------------------------
       case 'DAMAGED': {
         this.animTime += dt;
-        const damageFrames = this.frameDefs.damage.length;
+        const damageFrames = DogEnemy.defaultFrameDefs.damage.length;
         const frameDuration = DOG_CONFIG.DAMAGE_ANIM_DURATION / damageFrames;
         this.currentFrame = Math.min(
           damageFrames - 1,
@@ -296,7 +413,7 @@ export class DogEnemy {
             this.deathTimer = 0;
             this.playSound('whimper');
           } else {
-            // Recover from hit: face player and enter ALERT or CHASING
+            // Recover from hit: face player and enter ALERT
             this.facingRight = dx > 0;
             this.state = 'ALERT';
             this.alertTimer = DOG_CONFIG.ALERT_DURATION;
@@ -312,14 +429,14 @@ export class DogEnemy {
       // ------------------------------------------------------------
       case 'SLEEPING': {
         this.vx = 0;
-        // Continuous looping sleep animation
         this.animTime += dt;
-        const sleepFrames = this.frameDefs.sleep.length;
+        const sleepFrames = DogEnemy.defaultFrameDefs.sleep.length;
         this.currentFrame = Math.floor(this.animTime / 0.18) % sleepFrames;
 
         // Check if player entered detection radius OR if football rolled/flew nearby
         const ballDist = Math.hypot(football.x - dogCenterX, football.y - dogCenterY);
-        const isBallNearAndMoving = ballDist <= DOG_CONFIG.DETECTION_RANGE * 0.85 && Math.hypot(football.vx, football.vy) > 60;
+        const isBallNearAndMoving =
+          ballDist <= DOG_CONFIG.DETECTION_RANGE * 0.85 && Math.hypot(football.vx, football.vy) > 60;
 
         if (distanceToPlayer <= DOG_CONFIG.DETECTION_RANGE || isBallNearAndMoving) {
           this.state = 'WAKING_UP';
@@ -339,7 +456,7 @@ export class DogEnemy {
         this.vx = 0;
         this.wakeupTimer -= dt;
         this.animTime += dt;
-        const wakeupFrames = this.frameDefs.wakeup.length;
+        const wakeupFrames = DogEnemy.defaultFrameDefs.wakeup.length;
         this.currentFrame = Math.min(
           wakeupFrames - 1,
           Math.floor((this.animTime / DOG_CONFIG.WAKEUP_DURATION) * wakeupFrames)
@@ -347,43 +464,52 @@ export class DogEnemy {
 
         if (this.wakeupTimer <= 0) {
           this.facingRight = dx > 0;
-          if (distanceToPlayer <= DOG_CONFIG.ATTACK_RANGE) {
-            // Immediate bite if player is already within bite reach
-            this.startBiteAttack();
-          } else {
-            this.state = 'ALERT';
-            this.alertTimer = DOG_CONFIG.ALERT_DURATION;
-            this.animTime = 0;
-            this.currentFrame = 0;
-          }
+          this.state = 'ALERT';
+          this.alertTimer = DOG_CONFIG.ALERT_DURATION;
+          this.animTime = 0;
+          this.currentFrame = 0;
         }
         break;
       }
 
       // ------------------------------------------------------------
-      // 5. ALERT STATE (Brief menacing look toward player)
+      // 5. ALERT STATE (Alert stance, growling, watching player on loop)
       // ------------------------------------------------------------
       case 'ALERT': {
-        this.vx = 0;
         this.facingRight = dx > 0;
+        this.vx = 0;
         this.animTime += dt;
-        const alertFrames = this.frameDefs.alert.length;
+        const alertFrames = DogEnemy.defaultFrameDefs.alert.length;
         this.currentFrame = Math.floor(this.animTime / 0.12) % alertFrames;
 
-        // If player is unreachable on high platform, wait patiently underneath
-        if (isPlayerElevatedUnreachable) {
-          // If player has moved too far away horizontally, return home
-          if (Math.abs(dx) > DOG_CONFIG.DETECTION_RANGE * 1.4 || distanceFromSpawn > DOG_CONFIG.MAX_CHASE_DISTANCE) {
-            this.state = 'RETURNING';
-            this.animTime = 0;
-            this.currentFrame = 0;
-          }
+        // Periodic menacing growl while in alert mode
+        this.growlSoundTimer += dt;
+        if (this.growlSoundTimer >= 2.8) {
+          this.growlSoundTimer = 0;
+          this.playSound('growl');
+        }
+
+        // 1. Dog only returns to sleep when player is too far away
+        if (isPlayerTooFar) {
+          this.state = 'RETURNING';
+          this.animTime = 0;
+          this.currentFrame = 0;
           break;
         }
 
+        // 2. If player is close but unreachable (high platform or blocked by obstacle):
+        // PLAY ALERT MODE ON CONTINUOUS LOOP!
+        if (isUnreachable) {
+          // Maintain alert stance facing player
+          this.vx = 0;
+          break;
+        }
+
+        // 3. Player is within range, on the SAME ground, with a clear path:
+        // Transition to chase (run) or bite attack
         this.alertTimer -= dt;
         if (this.alertTimer <= 0) {
-          if (distanceToPlayer <= DOG_CONFIG.ATTACK_RANGE) {
+          if (distanceToPlayer <= DOG_CONFIG.ATTACK_RANGE && Math.abs(dy) < 45) {
             this.startBiteAttack();
           } else {
             this.state = 'CHASING';
@@ -395,29 +521,32 @@ export class DogEnemy {
       }
 
       // ------------------------------------------------------------
-      // 6. CHASING STATE (Runs toward player within territory limits)
+      // 6. CHASING STATE (Runs towards player when on same ground)
       // ------------------------------------------------------------
       case 'CHASING': {
         this.facingRight = dx > 0;
 
-        // Check if player climbed to an unreachable ledge above
-        if (isPlayerElevatedUnreachable && Math.abs(dx) < 60) {
-          this.state = 'ALERT';
-          this.alertTimer = 1.0;
-          this.vx = 0;
-          break;
-        }
-
-        // Check if dog reached its maximum chase territory from spawn
-        if (distanceFromSpawn > DOG_CONFIG.MAX_CHASE_DISTANCE || distanceToPlayer > DOG_CONFIG.DETECTION_RANGE * 1.6) {
+        // If player moves too far away: return to spawn and sleep
+        if (isPlayerTooFar) {
           this.state = 'RETURNING';
           this.animTime = 0;
           this.currentFrame = 0;
           break;
         }
 
-        // Check if player is close enough to bite
-        if (distanceToPlayer <= DOG_CONFIG.ATTACK_RANGE && Math.abs(dy) < 55) {
+        // If player climbs high platform or path becomes blocked by obstacle:
+        // Immediately halt and enter looping ALERT mode!
+        if (isUnreachable) {
+          this.state = 'ALERT';
+          this.alertTimer = DOG_CONFIG.ALERT_DURATION;
+          this.vx = 0;
+          this.animTime = 0;
+          this.currentFrame = 0;
+          break;
+        }
+
+        // Check if close enough to bite on open ground
+        if (distanceToPlayer <= DOG_CONFIG.ATTACK_RANGE && Math.abs(dy) < 45) {
           if (this.attackCooldownTimer <= 0) {
             this.startBiteAttack();
           } else {
@@ -426,13 +555,20 @@ export class DogEnemy {
           break;
         }
 
+        // If directly facing a low jumpable obstacle (e.g. low crate <= 54px):
+        const lowObstacle = this.findLowObstacleInFront(dx, solidObstacles);
+        if (lowObstacle && this.isGrounded) {
+          this.vy = -380;
+          this.isGrounded = false;
+        }
+
         // Run horizontally towards player
         const moveDir = dx > 0 ? 1 : -1;
         this.vx = moveDir * DOG_CONFIG.MOVE_SPEED;
 
         // Loop running animation
         this.animTime += dt;
-        const runFrames = this.frameDefs.run.length;
+        const runFrames = DogEnemy.defaultFrameDefs.run.length;
         this.currentFrame = Math.floor(this.animTime / 0.08) % runFrames;
         break;
       }
@@ -443,37 +579,41 @@ export class DogEnemy {
       case 'ATTACKING': {
         this.vx = 0;
         this.animTime += dt;
-        const biteFrames = this.frameDefs.bite.length;
+        const biteFrames = DogEnemy.defaultFrameDefs.bite.length;
         const biteDuration = 0.52; // Total bite animation time
         this.currentFrame = Math.min(
           biteFrames - 1,
           Math.floor((this.animTime / biteDuration) * biteFrames)
         );
 
-        // Active Bite Hit Window (Frames 3 through 5)
-        if (this.currentFrame >= 3 && this.currentFrame <= 5 && !this.hasDealtBiteDamage) {
-          const biteBox = this.getBiteHitbox();
-          const playerBox: Rect = {
-            x: player.x,
-            y: player.y,
-            width: player.width,
-            height: player.height,
-          };
+        // Active Bite Hit Window (Frames 3 through 6)
+        if (this.currentFrame >= 3 && this.currentFrame <= 6 && !this.hasDealtBiteDamage) {
+          if (!isObstacleBlocked) {
+            const biteBox = this.getBiteHitbox();
+            const playerBox: Rect = {
+              x: player.x,
+              y: player.y,
+              width: player.width,
+              height: player.height,
+            };
 
-          if (this.checkAABB(biteBox, playerBox)) {
-            // Apply 25% of player's maximum health damage
-            const damageAmount = 25; // 25 HP out of 100
-            const knockDir = this.facingRight ? 260 : -260;
-            player.takeDamage(damageAmount, knockDir);
-            this.hasDealtBiteDamage = true;
-            this.playSound('bite');
+            if (this.checkAABB(biteBox, playerBox)) {
+              const damageAmount = 25; // 25 HP out of 100
+              const knockDir = this.facingRight ? 260 : -260;
+              player.takeDamage(damageAmount, knockDir);
+              this.hasDealtBiteDamage = true;
+              this.playSound('bite');
+            }
           }
         }
 
         // Finish bite animation
         if (this.animTime >= biteDuration) {
           this.attackCooldownTimer = DOG_CONFIG.BITE_COOLDOWN;
-          if (distanceToPlayer <= DOG_CONFIG.ATTACK_RANGE) {
+          if (isUnreachable) {
+            this.state = 'ALERT';
+            this.alertTimer = DOG_CONFIG.ALERT_DURATION;
+          } else if (distanceToPlayer <= DOG_CONFIG.ATTACK_RANGE) {
             this.state = 'ATTACK_COOLDOWN';
           } else {
             this.state = 'CHASING';
@@ -491,11 +631,24 @@ export class DogEnemy {
         this.vx = 0;
         this.facingRight = dx > 0;
         this.animTime += dt;
-        const alertFrames = this.frameDefs.alert.length;
+        const alertFrames = DogEnemy.defaultFrameDefs.alert.length;
         this.currentFrame = Math.floor(this.animTime / 0.14) % alertFrames;
 
+        if (isPlayerTooFar) {
+          this.state = 'RETURNING';
+          this.animTime = 0;
+          this.currentFrame = 0;
+          break;
+        }
+
+        if (isUnreachable) {
+          this.state = 'ALERT';
+          this.alertTimer = DOG_CONFIG.ALERT_DURATION;
+          break;
+        }
+
         if (this.attackCooldownTimer <= 0) {
-          if (distanceToPlayer <= DOG_CONFIG.ATTACK_RANGE && Math.abs(dy) < 55) {
+          if (distanceToPlayer <= DOG_CONFIG.ATTACK_RANGE && Math.abs(dy) < 45) {
             this.startBiteAttack();
           } else {
             this.state = 'CHASING';
@@ -509,7 +662,7 @@ export class DogEnemy {
       // ------------------------------------------------------------
       case 'RETURNING': {
         const distToSpawn = this.spawnX - this.x;
-        if (Math.abs(distToSpawn) < 8) {
+        if (Math.abs(distToSpawn) < 14) {
           // Reached home spawn position: go back to sleep
           this.x = this.spawnX;
           this.y = this.spawnY;
@@ -520,10 +673,29 @@ export class DogEnemy {
           break;
         }
 
-        // If player enters detection radius again while returning, re-engage!
-        if (distanceToPlayer <= DOG_CONFIG.DETECTION_RANGE && !isPlayerElevatedUnreachable) {
-          this.facingRight = dx > 0;
-          this.state = 'CHASING';
+        // If player enters detection radius again while returning:
+        if (distanceToPlayer <= DOG_CONFIG.DETECTION_RANGE) {
+          if (isUnreachable) {
+            this.facingRight = dx > 0;
+            this.state = 'ALERT';
+            this.alertTimer = DOG_CONFIG.ALERT_DURATION;
+            this.vx = 0;
+            this.animTime = 0;
+            this.currentFrame = 0;
+            break;
+          } else {
+            this.facingRight = dx > 0;
+            this.state = 'CHASING';
+            this.animTime = 0;
+            this.currentFrame = 0;
+            break;
+          }
+        }
+
+        // Check if blocked by obstacle while returning:
+        if (this.isBlockedByObstacle) {
+          this.vx = 0;
+          this.state = 'SLEEPING';
           this.animTime = 0;
           this.currentFrame = 0;
           break;
@@ -535,7 +707,7 @@ export class DogEnemy {
         this.vx = returnDir * DOG_CONFIG.RETURN_SPEED;
 
         this.animTime += dt;
-        const runFrames = this.frameDefs.run.length;
+        const runFrames = DogEnemy.defaultFrameDefs.run.length;
         this.currentFrame = Math.floor(this.animTime / 0.09) % runFrames;
         break;
       }
@@ -544,7 +716,7 @@ export class DogEnemy {
     // ============================================================
     // PHYSICS, GEOMETRY COLLISION & GRAVITY
     // ============================================================
-    this.updatePhysics(dt, platforms, breakableWalls);
+    this.updatePhysics(dt, platforms, breakableWalls, crates);
   }
 
   private startBiteAttack() {
@@ -632,25 +804,168 @@ export class DogEnemy {
     return false;
   }
 
-  // Physics, solid wall & platform floor resolution
-  private updatePhysics(dt: number, platforms: Platform[], breakableWalls: BreakableWall[] = []) {
-    // 1. Horizontal movement & solid wall collision
+  // Collect all solid obstacle bounding boxes (crates, breakable walls, static walls)
+  private getSolidObstacles(
+    platforms: Platform[],
+    breakableWalls: BreakableWall[] = [],
+    crates: Crate[] = []
+  ): Rect[] {
+    const obstacles: Rect[] = [];
+
+    // 1. Crates
+    for (const crate of crates) {
+      obstacles.push(crate.getRect());
+    }
+
+    // 2. Unbroken breakable walls
+    for (const wall of breakableWalls) {
+      if (!wall.isBroken) {
+        obstacles.push({
+          x: wall.x,
+          y: wall.y,
+          width: wall.width,
+          height: wall.height,
+        });
+      }
+    }
+
+    // 3. Platform walls and solid ground steps that block movement
+    for (const plat of platforms) {
+      if (plat.type === 'wall') {
+        obstacles.push({
+          x: plat.x,
+          y: plat.y,
+          width: plat.width,
+          height: plat.height,
+        });
+      } else if (plat.type === 'ground' || plat.type === 'platform') {
+        if (plat.y < this.y + this.height - 10 && plat.y + plat.height > this.y + 8) {
+          obstacles.push({
+            x: plat.x,
+            y: plat.y,
+            width: plat.width,
+            height: plat.height,
+          });
+        }
+      }
+    }
+
+    return obstacles;
+  }
+
+  // Check if an impassable obstacle is between the dog and the player horizontally,
+  // or if the dog is directly facing/blocked by a solid obstacle
+  private checkIsPathBlocked(
+    dx: number,
+    player: Player,
+    obstacles: Rect[]
+  ): boolean {
+    if (this.isBlockedByObstacle) return true;
+
+    // Check direct proximity sensor in front of dog
+    if (this.checkIsDirectlyBlocked(dx, obstacles)) {
+      // If it's a jumpable low obstacle, path isn't blocked
+      if (!this.findLowObstacleInFront(dx, obstacles)) {
+        return true;
+      }
+    }
+
+    // Check if there is a solid wall/obstacle between dog and player horizontally
+    const minX = Math.min(this.x + this.width / 2, player.x + player.width / 2);
+    const maxX = Math.max(this.x + this.width / 2, player.x + player.width / 2);
+    const dogFeetY = this.y + this.height;
+
+    for (const obs of obstacles) {
+      const obsCenterX = obs.x + obs.width / 2;
+      if (obsCenterX > minX && obsCenterX < maxX) {
+        // Check if obstacle spans the vertical area between dog and player
+        if (obs.y < dogFeetY - 14 && obs.y + obs.height > this.y + 10) {
+          // If height is taller than 54px or is a solid/breakable wall
+          if (obs.height > 54) {
+            return true;
+          }
+        }
+      }
+    }
+
+    return false;
+  }
+
+  // Check if dog's immediate path in player's direction is blocked by a solid obstacle/crate/wall
+  private checkIsDirectlyBlocked(
+    dx: number,
+    obstacles: Rect[]
+  ): boolean {
+    const dir = dx > 0 ? 1 : -1;
+    const sensorDist = 20;
+    const frontSensorBox: Rect = {
+      x: dir > 0 ? this.x + this.width - 2 : this.x - sensorDist + 2,
+      y: this.y + 8,
+      width: sensorDist,
+      height: this.height - 16,
+    };
+
+    for (const obs of obstacles) {
+      if (this.checkAABB(frontSensorBox, obs)) {
+        return true;
+      }
+    }
+
+    return this.isBlockedByObstacle;
+  }
+
+  // Check if the obstacle directly in front is jumpable (e.g. low crate or step <= 54px high)
+  private findLowObstacleInFront(
+    dx: number,
+    obstacles: Rect[]
+  ): boolean {
+    const dir = dx > 0 ? 1 : -1;
+    const sensorDist = 24;
+    const frontSensorBox: Rect = {
+      x: dir > 0 ? this.x + this.width - 2 : this.x - sensorDist + 2,
+      y: this.y + 8,
+      width: sensorDist,
+      height: this.height - 16,
+    };
+
+    for (const obs of obstacles) {
+      if (this.checkAABB(frontSensorBox, obs)) {
+        const dogFeetY = this.y + this.height;
+        const obstacleTopY = obs.y;
+        // If the top of obstacle is within low jump height (< 54px above dog feet)
+        if (dogFeetY - obstacleTopY <= 54 && obs.height <= 64) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  // Physics, solid wall, crate & platform floor resolution
+  private updatePhysics(
+    dt: number,
+    platforms: Platform[],
+    breakableWalls: BreakableWall[] = [],
+    crates: Crate[] = []
+  ) {
+    // 1. Horizontal movement & solid wall / crate collision
+    this.isBlockedByObstacle = false;
     this.x += this.vx * dt;
 
-    const allObstacles: Rect[] = [
-      ...platforms.filter(p => p.type === 'wall' || p.type === 'ground'),
-      ...breakableWalls.filter(w => !w.isBroken),
-    ];
+    const allObstacles = this.getSolidObstacles(platforms, breakableWalls, crates);
 
     for (const obs of allObstacles) {
-      const dogBox: Rect = { x: this.x, y: this.y + 4, width: this.width, height: this.height - 8 };
+      const dogBox: Rect = { x: this.x, y: this.y + 6, width: this.width, height: this.height - 12 };
       if (this.checkAABB(dogBox, obs)) {
         if (this.vx > 0) {
           this.x = obs.x - this.width;
           this.vx = 0;
+          this.isBlockedByObstacle = true;
         } else if (this.vx < 0) {
           this.x = obs.x + obs.width;
           this.vx = 0;
+          this.isBlockedByObstacle = true;
         }
       }
     }
@@ -670,6 +985,24 @@ export class DogEnemy {
           // Check landing on top
           if (this.vy >= 0 && dogFeet >= plat.y && dogFeet <= plat.y + 24) {
             this.y = plat.y - this.height;
+            this.vy = 0;
+            this.isGrounded = true;
+            break;
+          }
+        }
+      }
+    }
+
+    // Landing on top of crates
+    if (!this.isGrounded) {
+      for (const crate of crates) {
+        const isHorizontallyAligned =
+          this.x + this.width > crate.x + 2 && this.x < crate.x + crate.width - 2;
+
+        if (isHorizontallyAligned) {
+          const dogFeet = this.y + this.height;
+          if (this.vy >= 0 && dogFeet >= crate.y && dogFeet <= crate.y + 24) {
+            this.y = crate.y - this.height;
             this.vy = 0;
             this.isGrounded = true;
             break;
@@ -728,10 +1061,11 @@ export class DogEnemy {
         break;
     }
 
-    const img = this.images[animKey] || this.images['enemy'];
-    const frames = this.frameDefs[animKey] || this.frameDefs['enemy'];
-    const frameIndex = Math.min(frames.length - 1, Math.max(0, this.currentFrame));
-    const crop = frames[frameIndex] || { sx: 0, sy: 0, sw: 100, sh: 100 };
+    const img = DogEnemy.getLoadedImage(animKey);
+    const defaultFrames = DogEnemy.defaultFrameDefs[animKey] || DogEnemy.defaultFrameDefs['enemy'];
+    const frameIndex = Math.min(defaultFrames.length - 1, Math.max(0, this.currentFrame));
+
+    const crop: FrameCrop = defaultFrames[frameIndex] || { sx: 0, sy: 0, sw: 100, sh: 100 };
 
     ctx.save();
 
@@ -763,8 +1097,11 @@ export class DogEnemy {
           this.renderWidth,
           this.renderHeight
         );
+      } else {
+        this.drawVectorDogFallback(ctx, this.state, this.currentFrame, this.renderWidth, this.renderHeight);
       }
     } else {
+      ctx.translate(destX, destY);
       if (img && img.complete && img.naturalWidth > 0) {
         ctx.drawImage(
           img,
@@ -772,39 +1109,89 @@ export class DogEnemy {
           crop.sy,
           crop.sw,
           crop.sh,
-          destX,
-          destY,
+          0,
+          0,
           this.renderWidth,
           this.renderHeight
         );
+      } else {
+        this.drawVectorDogFallback(ctx, this.state, this.currentFrame, this.renderWidth, this.renderHeight);
       }
     }
 
     ctx.restore();
 
-    // Health Bar & State Indicator Badge Above Dog
+    // Health Bar & State Indicator Badge Above Dog / Boss
     if (this.state !== 'SLEEPING' && this.state !== 'DEAD' && this.health > 0) {
       ctx.save();
-      const barW = 46;
-      const barH = 5;
-      const barX = drawX + this.width / 2 - barW / 2;
-      const barY = drawY - 14;
 
-      // Background
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-      ctx.fillRect(barX - 1, barY - 1, barW + 2, barH + 2);
+      if (this.isBoss) {
+        // Grand Boss Health Bar & Title
+        const barW = 140;
+        const barH = 10;
+        const barX = drawX + this.width / 2 - barW / 2;
+        const barY = drawY - 26;
 
-      // Health Fill (Red to Amber to Green)
-      const healthPct = Math.max(0, this.health / this.maxHealth);
-      ctx.fillStyle = healthPct > 0.5 ? '#22c55e' : healthPct > 0.25 ? '#f59e0b' : '#ef4444';
-      ctx.fillRect(barX, barY, Math.round(barW * healthPct), barH);
+        // Glowing outer frame
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+        ctx.strokeStyle = '#e11d48';
+        ctx.lineWidth = 2;
+        ctx.shadowColor = '#e11d48';
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.roundRect(barX - 2, barY - 2, barW + 4, barH + 4, 4);
+        ctx.fill();
+        ctx.stroke();
+        ctx.shadowBlur = 0;
 
-      // State Label
-      ctx.font = 'bold 9px system-ui, sans-serif';
-      ctx.fillStyle = '#f8fafc';
-      ctx.textAlign = 'center';
-      const stateLabel = this.state === 'ATTACKING' ? '⚡ BITE!' : this.state === 'CHASING' ? '🐾 CHASE' : '👀 ALERT';
-      ctx.fillText(stateLabel, drawX + this.width / 2, barY - 4);
+        // Health Fill
+        const healthPct = Math.max(0, this.health / this.maxHealth);
+        const fillW = Math.round(barW * healthPct);
+        const grad = ctx.createLinearGradient(barX, barY, barX + barW, barY);
+        grad.addColorStop(0, '#f43f5e');
+        grad.addColorStop(1, '#fb7185');
+        ctx.fillStyle = grad;
+        ctx.fillRect(barX, barY, fillW, barH);
+
+        // Segments
+        ctx.strokeStyle = 'rgba(15, 23, 42, 0.6)';
+        ctx.lineWidth = 1.5;
+        for (let seg = 1; seg < this.maxHealth; seg++) {
+          const sx = barX + (barW / this.maxHealth) * seg;
+          ctx.beginPath();
+          ctx.moveTo(sx, barY);
+          ctx.lineTo(sx, barY + barH);
+          ctx.stroke();
+        }
+
+        // Boss Title Badge
+        ctx.font = 'bold 11px system-ui, sans-serif';
+        ctx.fillStyle = '#fef08a';
+        ctx.textAlign = 'center';
+        const label = this.bossTitle || '👑 THE RATKEEPER';
+        ctx.fillText(label, drawX + this.width / 2, barY - 8);
+      } else {
+        const barW = 46;
+        const barH = 5;
+        const barX = drawX + this.width / 2 - barW / 2;
+        const barY = drawY - 14;
+
+        // Background
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+        ctx.fillRect(barX - 1, barY - 1, barW + 2, barH + 2);
+
+        // Health Fill (Red to Amber to Green)
+        const healthPct = Math.max(0, this.health / this.maxHealth);
+        ctx.fillStyle = healthPct > 0.5 ? '#22c55e' : healthPct > 0.25 ? '#f59e0b' : '#ef4444';
+        ctx.fillRect(barX, barY, Math.round(barW * healthPct), barH);
+
+        // State Label
+        ctx.font = 'bold 9px system-ui, sans-serif';
+        ctx.fillStyle = '#f8fafc';
+        ctx.textAlign = 'center';
+        const stateLabel = this.state === 'ATTACKING' ? '⚡ BITE!' : this.state === 'CHASING' ? '🐾 CHASE' : '👀 ALERT';
+        ctx.fillText(stateLabel, drawX + this.width / 2, barY - 4);
+      }
 
       ctx.restore();
     } else if (this.state === 'SLEEPING') {
@@ -857,5 +1244,278 @@ export class DogEnemy {
       }
       ctx.restore();
     }
+  }
+
+  // Robust procedural vector fallback rendering when sprite image is loading or missing
+  private drawVectorDogFallback(
+    ctx: CanvasRenderingContext2D,
+    state: DogState,
+    frame: number,
+    w: number,
+    h: number
+  ) {
+    ctx.save();
+
+    const scaleX = w / 108;
+    const scaleY = h / 78;
+    ctx.scale(scaleX, scaleY);
+
+    const isSleeping = state === 'SLEEPING';
+    const isWaking = state === 'WAKING_UP';
+    const isAlert = state === 'ALERT' || state === 'ATTACK_COOLDOWN';
+    const isRunning = state === 'CHASING' || state === 'RETURNING';
+    const isAttacking = state === 'ATTACKING';
+    const isDamaged = state === 'DAMAGED' || state === 'DEAD';
+
+    // Tail motion
+    const time = performance.now() / 1000;
+    const tailWag = isRunning ? Math.sin(time * 18) * 12 : isAlert ? Math.sin(time * 10) * 8 : isSleeping ? 0 : Math.sin(time * 4) * 4;
+
+    // Body Colors
+    const coatColor = isDamaged ? '#ef4444' : '#78350f'; // Dark amber/brown coat
+    const bellyColor = isDamaged ? '#fca5a5' : '#b45309'; // Warm amber underbelly
+    const darkFur = isDamaged ? '#991b1b' : '#451a03'; // Muzzle/ear dark tips
+    const collarColor = '#dc2626'; // Red spiked collar
+    const tagColor = '#facc15'; // Gold dog tag
+
+    if (isSleeping) {
+      // Curled sleeping dog
+      // Shadow
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+      ctx.beginPath();
+      ctx.ellipse(54, 72, 38, 8, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Curled Body
+      ctx.fillStyle = coatColor;
+      ctx.beginPath();
+      ctx.ellipse(54, 52, 34, 20, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Belly patch
+      ctx.fillStyle = bellyColor;
+      ctx.beginPath();
+      ctx.ellipse(52, 54, 24, 13, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Tail curled
+      ctx.strokeStyle = coatColor;
+      ctx.lineWidth = 7;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.arc(84, 50, 14, Math.PI * 0.2, Math.PI * 1.1);
+      ctx.stroke();
+
+      // Curled Head resting on paws
+      ctx.fillStyle = coatColor;
+      ctx.beginPath();
+      ctx.arc(36, 52, 16, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Snout
+      ctx.fillStyle = darkFur;
+      ctx.beginPath();
+      ctx.ellipse(26, 56, 9, 7, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Nose
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.arc(19, 55, 3, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Drooping Ear
+      ctx.fillStyle = darkFur;
+      ctx.beginPath();
+      ctx.ellipse(40, 43, 7, 12, 0.3, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Sleeping Closed Eye (Curve)
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(32, 48, 4, 0.2, Math.PI - 0.2);
+      ctx.stroke();
+
+      // Collar
+      ctx.fillStyle = collarColor;
+      ctx.fillRect(36, 56, 6, 6);
+    } else {
+      // Active Dog (Alert, Running, Attacking, Damaged)
+      const legPhase = (frame % 8) / 8;
+      const legStride = Math.sin(legPhase * Math.PI * 2) * 16;
+
+      // Shadow
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+      ctx.beginPath();
+      ctx.ellipse(54, 72, 40, 7, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Tail
+      ctx.strokeStyle = coatColor;
+      ctx.lineWidth = 7;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(86, 36);
+      ctx.quadraticCurveTo(98, 22 + tailWag, 104, 18 + tailWag * 1.2);
+      ctx.stroke();
+
+      // Back Legs
+      ctx.fillStyle = darkFur;
+      if (isRunning) {
+        ctx.fillRect(72 - legStride * 0.6, 46, 9, 26);
+        ctx.fillRect(62 + legStride * 0.6, 46, 9, 26);
+      } else {
+        ctx.fillRect(74, 46, 9, 26);
+        ctx.fillRect(66, 48, 9, 24);
+      }
+
+      // Main Torso Body
+      ctx.fillStyle = coatColor;
+      ctx.beginPath();
+      ctx.roundRect(36, 28, 52, 28, 12);
+      ctx.fill();
+
+      // Chest / Belly Fur
+      ctx.fillStyle = bellyColor;
+      ctx.beginPath();
+      ctx.ellipse(50, 44, 20, 10, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Front Legs
+      ctx.fillStyle = coatColor;
+      if (isRunning) {
+        ctx.fillRect(38 + legStride, 44, 9, 28);
+        ctx.fillRect(48 - legStride, 44, 9, 28);
+      } else if (isAttacking) {
+        ctx.fillRect(32, 46, 9, 24);
+        ctx.fillRect(44, 44, 9, 26);
+      } else {
+        ctx.fillRect(36, 44, 9, 28);
+        ctx.fillRect(46, 44, 9, 28);
+      }
+
+      // Head position
+      const headX = isAttacking ? 22 : 28;
+      const headY = isAttacking ? 28 : isAlert ? 18 : 22;
+
+      // Head
+      ctx.fillStyle = coatColor;
+      ctx.beginPath();
+      ctx.arc(headX, headY, 16, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Collar
+      ctx.fillStyle = collarColor;
+      ctx.fillRect(headX + 4, headY + 8, 7, 12);
+      ctx.fillStyle = tagColor;
+      ctx.beginPath();
+      ctx.arc(headX + 7, headY + 16, 3, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Perked Ears
+      ctx.fillStyle = darkFur;
+      ctx.beginPath();
+      ctx.moveTo(headX + 2, headY - 10);
+      ctx.lineTo(headX + 9, headY - 26);
+      ctx.lineTo(headX + 16, headY - 8);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.moveTo(headX - 6, headY - 8);
+      ctx.lineTo(headX - 1, headY - 24);
+      ctx.lineTo(headX + 6, headY - 8);
+      ctx.closePath();
+      ctx.fill();
+
+      // Muzzle & Snout
+      ctx.fillStyle = darkFur;
+      if (isAttacking) {
+        // Open Jaws
+        ctx.beginPath();
+        ctx.moveTo(headX - 4, headY - 2);
+        ctx.lineTo(headX - 22, headY - 6);
+        ctx.lineTo(headX - 8, headY + 2);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.moveTo(headX - 4, headY + 4);
+        ctx.lineTo(headX - 18, headY + 14);
+        ctx.lineTo(headX - 6, headY + 8);
+        ctx.closePath();
+        ctx.fill();
+
+        // White Fangs
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.moveTo(headX - 18, headY - 5);
+        ctx.lineTo(headX - 15, headY - 1);
+        ctx.lineTo(headX - 12, headY - 4);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.moveTo(headX - 15, headY + 11);
+        ctx.lineTo(headX - 13, headY + 6);
+        ctx.lineTo(headX - 10, headY + 9);
+        ctx.closePath();
+        ctx.fill();
+      } else {
+        // Closed Muzzle
+        ctx.beginPath();
+        ctx.ellipse(headX - 10, headY + 3, 11, 8, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Black Nose
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.arc(headX - 18, headY + 1, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Eyes
+      if (isDamaged) {
+        // Wincing X Eyes
+        ctx.strokeStyle = '#fef08a';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(headX - 4, headY - 6);
+        ctx.lineTo(headX + 2, headY);
+        ctx.moveTo(headX + 2, headY - 6);
+        ctx.lineTo(headX - 4, headY);
+        ctx.stroke();
+      } else if (isAlert || isRunning || isAttacking) {
+        // Wide Glowing Alert Eyes
+        ctx.fillStyle = '#fef08a';
+        ctx.beginPath();
+        ctx.ellipse(headX - 1, headY - 4, 4.5, 5.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.arc(headX - 2, headY - 4, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // White Glint
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(headX - 3, headY - 5, 1, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (isWaking) {
+        // Half Open Drowsy Eyes
+        ctx.fillStyle = '#fef08a';
+        ctx.beginPath();
+        ctx.ellipse(headX - 1, headY - 3, 4, 3, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.arc(headX - 1, headY - 3, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    ctx.restore();
   }
 }

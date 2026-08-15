@@ -30,6 +30,18 @@ export const StartMenu: React.FC<StartMenuProps> = ({
   const [sfxVolume, setSfxVolume] = useState(100);
   const [isMuted, setIsMuted] = useState(false);
 
+  // Menu Image source with fallbacks
+  const getInitialMenuSrc = () => {
+    const saved = SaveManager.getSavedSprite('start_menue');
+    if (saved?.dataUrl) return saved.dataUrl;
+    const base = import.meta.env.BASE_URL || '/';
+    const cleanBase = base.replace(/\/+$/, '');
+    return `${cleanBase}/start_menue.png`;
+  };
+
+  const [menuImageSrc, setMenuImageSrc] = useState<string>(getInitialMenuSrc);
+  const [imageError, setImageError] = useState(false);
+
   useEffect(() => {
     if (isOpen) {
       const saved = SaveManager.loadGameState();
@@ -40,8 +52,35 @@ export const StartMenu: React.FC<StartMenuProps> = ({
       } else {
         setHasSave(false);
       }
+
+      setMenuImageSrc(getInitialMenuSrc());
     }
+
+    const unsub = SaveManager.addSpriteChangeListener((type, config) => {
+      if (type === 'start_menue') {
+        if (config?.dataUrl) {
+          setMenuImageSrc(config.dataUrl);
+          setImageError(false);
+        } else {
+          setMenuImageSrc(getInitialMenuSrc());
+        }
+      }
+    });
+
+    return () => unsub();
   }, [isOpen]);
+
+  const handleImageError = () => {
+    // Try alternate spelling if start_menue failed
+    const base = import.meta.env.BASE_URL || '/';
+    const cleanBase = base.replace(/\/+$/, '');
+    const altSrc = `${cleanBase}/start_menu.png`;
+    if (menuImageSrc !== altSrc && !menuImageSrc.startsWith('data:')) {
+      setMenuImageSrc(altSrc);
+    } else {
+      setImageError(true);
+    }
+  };
 
   const playClickSound = () => {
     if (isMuted) return;
@@ -92,12 +131,45 @@ export const StartMenu: React.FC<StartMenuProps> = ({
     >
       {/* 1. Main Menu Aspect Container (matches 1536 x 1024 native image ratio) */}
       <div className="relative w-full max-w-[1280px] max-h-[853px] aspect-[1536/1024] bg-slate-900 shadow-2xl rounded-2xl overflow-hidden border border-slate-800 flex items-center justify-center">
-        {/* Background Menu Image */}
-        <img
-          src="/start_menue.png"
-          alt="Football Game Start Menu"
-          className="absolute inset-0 w-full h-full object-contain pointer-events-none"
-        />
+        {/* Background Menu Image with error fallback */}
+        {!imageError ? (
+          <img
+            src={menuImageSrc}
+            alt="Football Game Start Menu"
+            onError={handleImageError}
+            className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+          />
+        ) : (
+          /* Procedural Fallback UI if image file fails */
+          <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-sky-950 flex items-center justify-between px-16">
+            <div className="space-y-4 max-w-md">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-semibold">
+                <Sparkles className="w-4 h-4" />
+                <span>EPIC FOOTBALL ADVENTURE</span>
+              </div>
+              <h1 className="text-5xl font-black tracking-tight text-white drop-shadow-md">
+                FOOTBALL <span className="text-lime-400">HERO</span>
+              </h1>
+              <p className="text-slate-300 text-sm leading-relaxed">
+                Shoot precision footballs, teleport through obstacles, collect power-ups, and defeat the watchdog bosses!
+              </p>
+            </div>
+            <div className="w-[320px] space-y-3">
+              <div className="p-3 bg-slate-800/80 border border-lime-400/50 rounded-xl text-center font-bold text-lime-300 text-lg shadow-lg">
+                NEW GAME
+              </div>
+              <div className="p-3 bg-slate-800/80 border border-sky-400/50 rounded-xl text-center font-bold text-sky-300 text-lg shadow-lg">
+                LOAD GAME
+              </div>
+              <div className="p-3 bg-slate-800/80 border border-amber-400/50 rounded-xl text-center font-bold text-amber-300 text-lg shadow-lg">
+                OPTION
+              </div>
+              <div className="p-3 bg-slate-800/80 border border-rose-400/50 rounded-xl text-center font-bold text-rose-300 text-lg shadow-lg">
+                QUIT
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Subtle Ambient Scanline Overlay */}
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-sky-500/5 to-black/30 pointer-events-none" />

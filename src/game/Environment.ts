@@ -2,6 +2,8 @@ import { Platform, Rect, BreakableWall, WaterZone, ThornHazard, Checkpoint, Sand
 import { Crate } from './Crate';
 import { DogEnemy } from './DogEnemy';
 import { HealthPotion } from './HealthPotion';
+import { StoneGate } from './StoneGate';
+import { Elevator } from './Elevator';
 import { Level2Jungle, JunglePalm, JungleVine, JungleRuin, JungleFirefly } from './Level2Jungle';
 
 export class Environment {
@@ -21,6 +23,9 @@ export class Environment {
   public cavePortals: CavePortal[] = [];
   public dogs: DogEnemy[] = [];
   public healthPotions: HealthPotion[] = [];
+  public collectedPotionIds: string[] = [];
+  public stoneGate: StoneGate | null = null;
+  public elevator: Elevator | null = null;
 
   // Level 2 Jungle Specific Scenery
   public junglePalms: JunglePalm[] = [];
@@ -118,6 +123,8 @@ export class Environment {
     this.cavePortals = [];
     this.dogs = [];
     this.healthPotions = [];
+    this.stoneGate = null;
+    this.elevator = null;
 
     // =========================================================
     // AREA 1 — SCHOOL ROAD (TUTORIAL) (0 to 900)
@@ -504,6 +511,21 @@ export class Environment {
       type: 'ground',
       color: '#5c3a21',
       topColor: '#48a832',
+    });
+
+    // Checkpoint 4 (Mountain Tunnel End / Level 1 Goal Area)
+    this.checkpoints.push({
+      id: 'cp-tunnel-exit',
+      name: 'Mountain Tunnel End',
+      x: 7820,
+      y: 420,
+      width: 32,
+      height: 60,
+      playerSpawnX: 7820,
+      playerSpawnY: 324, // Standing on ground Y=420 (height 96: 420 - 96 = 324)
+      ballSpawnX: 7740,
+      ballSpawnY: 388, // Resting on ground Y=420 (diameter 32: 420 - 32 = 388)
+      isActive: false,
     });
 
     // Level 1 Mountain Tunnel Portal to Level 2
@@ -1078,8 +1100,8 @@ export class Environment {
       const drawY = plat.y - cameraY;
       if (drawX + plat.width > -50 && drawX < viewWidth + 50) {
         if (plat.type === 'ground') {
-          // SOLID DIRT FILL down to level base (y=700 + extra buffer)
-          const fillHeight = Math.max(plat.height, this.levelHeight - plat.y + 400);
+          // SOLID DIRT / ROCK FILL using plat.height
+          const fillHeight = plat.height;
 
           // Dark Soil Fill Base
           ctx.fillStyle = plat.color || '#5c3a21';
@@ -1241,6 +1263,14 @@ export class Environment {
         potion.render(ctx, cameraX, cameraY, showDebugBoxes);
       }
     });
+
+    // 7.6. Underground Elevator & Ancient Stone Gate
+    if (this.elevator) {
+      this.elevator.render(ctx, cameraX, cameraY);
+    }
+    if (this.stoneGate) {
+      this.stoneGate.render(ctx, cameraX, cameraY);
+    }
 
     // 8. Bushes & Rocks (Level 1 Suburbia only)
     if (this.currentLevel === 1) {

@@ -3,15 +3,31 @@ export interface SavedSpriteConfig {
   frameCount?: number;
 }
 
-export type SpriteType = 'character' | 'idle' | 'run' | 'jump' | 'kick' | 'climb';
+export type PlayerSpriteType = 'character' | 'idle' | 'run' | 'jump' | 'kick' | 'climb';
+export type DogSpriteType = 'dog_sleep' | 'dog_wakeup' | 'dog_alert' | 'dog_run' | 'dog_bite' | 'dog_damage' | 'dog_enemy';
+export type MenuSpriteType = 'start_menue' | 'background_level1';
+
+export type SpriteType = PlayerSpriteType | DogSpriteType | MenuSpriteType;
 
 export interface SavedSprites {
+  // Player
   character?: SavedSpriteConfig;
   idle?: SavedSpriteConfig;
   run?: SavedSpriteConfig;
   jump?: SavedSpriteConfig;
   kick?: SavedSpriteConfig;
   climb?: SavedSpriteConfig;
+  // Dog Enemies
+  dog_sleep?: SavedSpriteConfig;
+  dog_wakeup?: SavedSpriteConfig;
+  dog_alert?: SavedSpriteConfig;
+  dog_run?: SavedSpriteConfig;
+  dog_bite?: SavedSpriteConfig;
+  dog_damage?: SavedSpriteConfig;
+  dog_enemy?: SavedSpriteConfig;
+  // Menu & Environment
+  start_menue?: SavedSpriteConfig;
+  background_level1?: SavedSpriteConfig;
 }
 
 export interface SavedGameState {
@@ -31,13 +47,37 @@ export interface SavedGameState {
   };
   brokenWallIds: string[];
   crates: { id: string; x: number; y: number }[];
+  collectedPotionIds?: string[];
+  bossDefeated?: boolean;
+  stoneGateOpen?: boolean;
   timestamp: number;
 }
 
 const SPRITES_STORAGE_KEY = 'FOOTBALL_SAVED_SPRITES_V1';
 const GAME_STATE_STORAGE_KEY = 'FOOTBALL_GAME_SAVE_V1';
 
+type SpriteChangeListener = (type: SpriteType, config?: SavedSpriteConfig) => void;
+
 export class SaveManager {
+  private static spriteListeners: SpriteChangeListener[] = [];
+
+  public static addSpriteChangeListener(listener: SpriteChangeListener) {
+    this.spriteListeners.push(listener);
+    return () => {
+      this.spriteListeners = this.spriteListeners.filter(l => l !== listener);
+    };
+  }
+
+  private static notifySpriteChange(type: SpriteType, config?: SavedSpriteConfig) {
+    this.spriteListeners.forEach(listener => {
+      try {
+        listener(type, config);
+      } catch (e) {
+        console.warn('Error in sprite change listener:', e);
+      }
+    });
+  }
+
   // ==========================================================
   // SPRITE SHEETS & ANIMATIONS PERSISTENCE
   // ==========================================================
@@ -47,6 +87,7 @@ export class SaveManager {
       const existing = this.loadAllSprites();
       existing[type] = { dataUrl, frameCount };
       localStorage.setItem(SPRITES_STORAGE_KEY, JSON.stringify(existing));
+      this.notifySpriteChange(type, existing[type]);
       return true;
     } catch (err) {
       console.warn('Failed to save sprite to localStorage (may be storage limit):', err);
@@ -59,6 +100,7 @@ export class SaveManager {
       const existing = this.loadAllSprites();
       delete existing[type];
       localStorage.setItem(SPRITES_STORAGE_KEY, JSON.stringify(existing));
+      this.notifySpriteChange(type, undefined);
     } catch (err) {
       console.warn('Failed to remove sprite from localStorage:', err);
     }
@@ -67,6 +109,7 @@ export class SaveManager {
   public static clearAllSprites(): void {
     try {
       localStorage.removeItem(SPRITES_STORAGE_KEY);
+      this.notifySpriteChange('character', undefined);
     } catch (err) {
       console.warn('Failed to clear sprites from localStorage:', err);
     }

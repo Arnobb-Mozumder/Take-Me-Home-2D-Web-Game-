@@ -34,6 +34,7 @@ export class Game {
   public transitionTargetLevel = 1;
   public transitionTitle = '';
   public transitionSubtitle = '';
+  public transitionSpawnAtEnd = false;
   public chapterBannerTimer = 0;
 
   // Persistence and Auto-save System
@@ -176,7 +177,8 @@ export class Game {
   public startLevelTransition(
     targetLevel: number,
     title: string = 'CHAPTER 2: THE JUNGLE RUSH',
-    subtitle: string = 'Entering the Wild Canopy...'
+    subtitle: string = 'Entering the Wild Canopy...',
+    spawnAtEnd: boolean = false
   ) {
     if (this.gameState === 'LEVEL_TRANSITION') return;
 
@@ -186,6 +188,7 @@ export class Game {
     this.transitionTargetLevel = targetLevel;
     this.transitionTitle = title;
     this.transitionSubtitle = subtitle;
+    this.transitionSpawnAtEnd = spawnAtEnd;
     this.camera.addShake(4, 0.4);
   }
 
@@ -193,7 +196,8 @@ export class Game {
     this.startLevelTransition(
       levelNum,
       levelNum === 2 ? 'CHAPTER 2: THE JUNGLE RUSH' : 'CHAPTER 1: THE SUBURBIA RUN',
-      levelNum === 2 ? 'Entering the Wild Canopy...' : 'Returning to Suburbia...'
+      levelNum === 2 ? 'Entering the Wild Canopy...' : 'Returning to Suburbia...',
+      levelNum === 1
     );
   }
 
@@ -347,6 +351,7 @@ export class Game {
             this.football,
             this.environment.platforms,
             this.environment.breakableWalls,
+            this.environment.crates,
             (defeatedDog) => {
               this.camera.addShake(7, 0.3);
               this.environment.triggerImpactDust(
@@ -356,6 +361,25 @@ export class Game {
             }
           );
         });
+
+        // Mutual separation between dogs so they don't overlap into each other
+        const dogs = this.environment.dogs;
+        for (let i = 0; i < dogs.length; i++) {
+          for (let j = i + 1; j < dogs.length; j++) {
+            const dogA = dogs[i];
+            const dogB = dogs[j];
+            if (!dogA.isDefeated && !dogB.isDefeated && dogA.state !== 'SLEEPING' && dogB.state !== 'SLEEPING') {
+              const dx = dogB.x - dogA.x;
+              const dy = dogB.y - dogA.y;
+              if (Math.abs(dx) < 52 && Math.abs(dy) < 30) {
+                const overlap = 52 - Math.abs(dx);
+                const push = (overlap / 2) * (dx >= 0 ? 1 : -1);
+                dogA.x -= push * 0.12;
+                dogB.x += push * 0.12;
+              }
+            }
+          }
+        }
 
         // Check if player died from dog attacks
         if (this.player.health <= 0 && this.gameState === 'PLAYING') {
@@ -418,9 +442,24 @@ export class Game {
       // 5.1 Check Cave Portals / Tunnel Collision (Level Transition)
       for (const portal of this.environment.cavePortals) {
         if (this.physics.checkAABB(playerHazardBox, portal)) {
-          this.startLevelTransition(portal.targetLevel, portal.title, portal.subtitle);
+          this.startLevelTransition(
+            portal.targetLevel,
+            portal.title,
+            portal.subtitle,
+            portal.spawnAtEnd ?? (portal.targetLevel === 1)
+          );
           break;
         }
+      }
+
+      // Also if player moves left past boundary at Level 2 entrance
+      if (this.environment.currentLevel === 2 && this.player.x <= 15) {
+        this.startLevelTransition(
+          1,
+          'CHAPTER 1: THE SUBURBIA RUN',
+          'Returning to the Suburbia Grounds...',
+          true
+        );
       }
 
       // Water Hazards Check (Only trigger ball lost if ball is airborne/submerged, not securely resting on sand/bank)
@@ -483,15 +522,36 @@ export class Game {
 
           // Swap level data
           this.environment.loadLevel(this.transitionTargetLevel);
-          this.activeCheckpoint = this.environment.checkpoints[0];
-          this.player.reset(
-            this.activeCheckpoint.playerSpawnX,
-            this.activeCheckpoint.playerSpawnY
-          );
-          this.football.reset(
-            this.activeCheckpoint.ballSpawnX,
-            this.activeCheckpoint.ballSpawnY
-          );
+
+          if (this.transitionSpawnAtEnd) {
+            // Find end tunnel checkpoint (e.g. cp-tunnel-exit) or the last checkpoint in the level
+            const endCp =
+              this.environment.checkpoints.find(c => c.id === 'cp-tunnel-exit') ||
+              this.environment.checkpoints[this.environment.checkpoints.length - 1];
+            this.activeCheckpoint = endCp;
+            this.environment.checkpoints.forEach(c => (c.isActive = true));
+            this.player.reset(
+              this.activeCheckpoint.playerSpawnX,
+              this.activeCheckpoint.playerSpawnY
+            );
+            this.player.facingRight = false; // Facing left into Suburbia from the tunnel
+            this.football.reset(
+              this.activeCheckpoint.ballSpawnX,
+              this.activeCheckpoint.ballSpawnY
+            );
+          } else {
+            this.activeCheckpoint = this.environment.checkpoints[0];
+            this.player.reset(
+              this.activeCheckpoint.playerSpawnX,
+              this.activeCheckpoint.playerSpawnY
+            );
+            this.player.facingRight = true;
+            this.football.reset(
+              this.activeCheckpoint.ballSpawnX,
+              this.activeCheckpoint.ballSpawnY
+            );
+          }
+
           this.camera.x = Math.max(0, this.player.x - this.camera.viewWidth * 0.26);
           this.camera.y = Math.max(-150, this.player.y - this.camera.viewHeight * 0.68);
           this.saveGameProgress(true, `Entered ${this.transitionTitle}!`);
