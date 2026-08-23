@@ -1,32 +1,31 @@
 import { Platform, Rect } from './types';
 import { Player } from './Player';
 import { Football } from './Football';
+import { InputManager } from './InputManager';
+import { DogEnemy } from './DogEnemy';
 
-export type ElevatorState =
-  | 'IDLE_TOP'
-  | 'CLOSING_TOP'
-  | 'DESCENDING'
-  | 'OPENING_BOTTOM'
-  | 'IDLE_BOTTOM'
-  | 'CLOSING_BOTTOM'
-  | 'ASCENDING'
-  | 'OPENING_TOP';
+export type ElevatorState = 'IDLE_TOP' | 'DESCENDING' | 'IDLE_BOTTOM' | 'ASCENDING';
+export type ElevatorAction = 'NONE' | 'RIDE_DOWN' | 'CALL_DOWN' | 'RIDE_UP' | 'CALL_UP';
 
 export class Elevator implements Rect {
   public id = 'underground-elevator';
   public x: number;
-  public y: number; // Current cabin top Y
-  public width: number = 100;
-  public height: number = 110;
+  public y: number; // Current platform top Y
+  public width: number = 130;
+  public height: number = 22;
 
   public topFloorY: number; // Y level of ground on surface (e.g. 110)
-  public bottomFloorY: number; // Y level of ground underground (e.g. 1020)
+  public bottomFloorY: number; // Y level of ground underground (e.g. 620)
 
   public state: ElevatorState = 'IDLE_TOP';
-  public doorOpenProgress: number = 1; // 1 = fully open, 0 = fully closed
-  public travelProgress: number = 0; // 0 = at top, 1 = at bottom
-  public stateTimer: number = 0;
+  public vy: number = 0;
+  public travelSpeed: number = 260; // px/s
   public gearRotation: number = 0;
+  public pulseTimer: number = 0;
+
+  public arrivalCooldown: number = 0;
+  public hasSteppedOffAfterArrival: boolean = true;
+  public currentAction: ElevatorAction = 'NONE';
 
   // Visual prompt helper
   public showPrompt: boolean = false;
@@ -35,214 +34,212 @@ export class Elevator implements Rect {
   constructor(
     x: number = 7920,
     topFloorY: number = 110,
-    bottomFloorY: number = 1020
+    bottomFloorY: number = 620
   ) {
     this.x = x;
     this.topFloorY = topFloorY;
     this.bottomFloorY = bottomFloorY;
-    this.y = topFloorY - this.height;
+    this.y = topFloorY;
   }
 
   public isTransitioning(): boolean {
-    return (
-      this.state === 'CLOSING_TOP' ||
-      this.state === 'DESCENDING' ||
-      this.state === 'OPENING_BOTTOM' ||
-      this.state === 'CLOSING_BOTTOM' ||
-      this.state === 'ASCENDING' ||
-      this.state === 'OPENING_TOP'
-    );
+    return this.state === 'DESCENDING' || this.state === 'ASCENDING';
   }
 
-  public triggerEnter(player: Player, football: Football) {
-    if (this.state === 'IDLE_TOP') {
-      this.state = 'CLOSING_TOP';
-      this.stateTimer = 0;
-      // Position player and ball safely inside cabin
-      player.x = this.x + this.width / 2 - player.width / 2;
-      player.vx = 0;
-      player.vy = 0;
-      player.state = 'IDLE';
-
-      football.x = this.x + this.width / 2 + 16;
-      football.vx = 0;
-      football.vy = 0;
-      football.state = 'RESTING';
-    } else if (this.state === 'IDLE_BOTTOM') {
-      this.state = 'CLOSING_BOTTOM';
-      this.stateTimer = 0;
-      player.x = this.x + this.width / 2 - player.width / 2;
-      player.vx = 0;
-      player.vy = 0;
-      player.state = 'IDLE';
-
-      football.x = this.x + this.width / 2 + 16;
-      football.vx = 0;
-      football.vy = 0;
-      football.state = 'RESTING';
+  public update(
+    dt: number,
+    player: Player,
+    football: Football,
+    input?: InputManager,
+    dogs?: DogEnemy[]
+  ): { isOperating: boolean; lockPlayer: boolean } {
+    this.pulseTimer += dt * 4;
+    if (this.arrivalCooldown > 0) {
+      this.arrivalCooldown = Math.max(0, this.arrivalCooldown - dt);
     }
-  }
 
-  public update(dt: number, player: Player, football: Football): { isOperating: boolean; lockPlayer: boolean } {
-    const topCabinY = this.topFloorY - this.height;
-    const bottomCabinY = this.bottomFloorY - this.height;
+    // Check if player is standing on the elevator platform
+    const playerFootY = player.y + player.height;
+    const playerHorizOverlap = player.x + player.width > this.x && player.x < this.x + this.width;
+    const playerOnPlatform =
+      playerHorizOverlap && Math.abs(playerFootY - this.y) <= 22 && player.vy >= -40;
 
-    // Check player proximity to show prompt
-    const cabinCenterX = this.x + this.width / 2;
-    const distToPlayer = Math.abs((player.x + player.width / 2) - cabinCenterX);
-    const playerAtTop = Math.abs((player.y + player.height) - this.topFloorY) < 30;
-    const playerAtBottom = Math.abs((player.y + player.height) - this.bottomFloorY) < 30;
+    // Track stepping off after arriving at destination floor
+    if (!playerOnPlatform) {
+      this.hasSteppedOffAfterArrival = true;
+    }
 
-    if (
-      (this.state === 'IDLE_TOP' && playerAtTop && distToPlayer < 80) ||
-      (this.state === 'IDLE_BOTTOM' && playerAtBottom && distToPlayer < 80)
-    ) {
-      this.showPrompt = true;
-      this.promptAlpha = Math.min(1, this.promptAlpha + dt * 4);
+    // Check if football is resting/bouncing on the platform
+    const ballFootY = football.y + football.radius * 2;
+    const ballHorizOverlap = football.x + football.radius * 2 > this.x && football.x < this.x + this.width;
 
-      // Auto-trigger elevator when player steps well inside cabin
-      if (distToPlayer < 24 && (player.isGrounded || Math.abs(player.y + player.height - this.y - this.height) < 10)) {
-        this.triggerEnter(player, football);
+    // Proximity to station call levers
+    const distToPlayer = Math.abs((player.x + player.width / 2) - (this.x + this.width / 2));
+    const distYToTopStation = Math.abs(playerFootY - this.topFloorY);
+    const distYToBottomStation = Math.abs(playerFootY - this.bottomFloorY);
+
+    const isNearTopStation = distToPlayer < 110 && distYToTopStation < 70;
+    const isNearBottomStation = distToPlayer < 110 && distYToBottomStation < 70;
+
+    // Determine current legal action - requires explicit step-on and [F] interaction
+    this.currentAction = 'NONE';
+    if (!this.isTransitioning() && this.arrivalCooldown <= 0) {
+      if (this.state === 'IDLE_TOP') {
+        if (playerOnPlatform && this.hasSteppedOffAfterArrival) {
+          this.currentAction = 'RIDE_DOWN';
+        } else if (isNearBottomStation) {
+          this.currentAction = 'CALL_DOWN';
+        }
+      } else if (this.state === 'IDLE_BOTTOM') {
+        if (playerOnPlatform && this.hasSteppedOffAfterArrival) {
+          this.currentAction = 'RIDE_UP';
+        } else if (isNearTopStation) {
+          this.currentAction = 'CALL_UP';
+        }
       }
+    }
+
+    if (this.currentAction !== 'NONE') {
+      this.showPrompt = true;
+      this.promptAlpha = Math.min(1, this.promptAlpha + dt * 6);
     } else {
       this.showPrompt = false;
-      this.promptAlpha = Math.max(0, this.promptAlpha - dt * 3);
+      this.promptAlpha = Math.max(0, this.promptAlpha - dt * 4);
     }
 
-    let lockPlayer = false;
+    // Process Elevator Action via dedicated [F] key or [F] LIFT virtual button
+    if (input && this.currentAction !== 'NONE' && this.arrivalCooldown <= 0) {
+      if (input.consumeElevatorRequest()) {
+        if (this.currentAction === 'RIDE_DOWN' || this.currentAction === 'CALL_DOWN') {
+          this.state = 'DESCENDING';
+          this.hasSteppedOffAfterArrival = false;
+          player.showFloatingStatus('ELEVATOR DESCENDING ⬇️', '#38bdf8', '#0284c7');
+        } else if (this.currentAction === 'RIDE_UP' || this.currentAction === 'CALL_UP') {
+          this.state = 'ASCENDING';
+          this.hasSteppedOffAfterArrival = false;
+          player.showFloatingStatus('ELEVATOR ASCENDING ⬆️', '#4ade80', '#16a34a');
+        }
+      }
+    }
 
     switch (this.state) {
-      case 'IDLE_TOP':
-        this.y = topCabinY;
-        this.doorOpenProgress = 1;
-        this.travelProgress = 0;
+      case 'IDLE_TOP': {
+        this.y = this.topFloorY;
+        this.vy = 0;
         break;
-
-      case 'CLOSING_TOP':
-        lockPlayer = true;
-        this.stateTimer += dt;
-        this.doorOpenProgress = Math.max(0, 1 - this.stateTimer / 0.6);
-        if (this.stateTimer >= 0.6) {
-          this.state = 'DESCENDING';
-          this.stateTimer = 0;
-        }
-        break;
+      }
 
       case 'DESCENDING': {
-        lockPlayer = true;
-        this.stateTimer += dt;
-        const duration = 2.4; // 2.4s smooth elevator ride
-        const rawProgress = Math.min(1, this.stateTimer / duration);
-        // Smooth ease-in-out curve
-        this.travelProgress = 0.5 - 0.5 * Math.cos(rawProgress * Math.PI);
-        this.y = topCabinY + (bottomCabinY - topCabinY) * this.travelProgress;
-        this.gearRotation += dt * 8;
+        this.vy = this.travelSpeed;
+        const dy = this.vy * dt;
+        this.y += dy;
+        this.gearRotation += dt * 7;
 
-        // Keep player and ball anchored inside moving elevator
-        player.x = cabinCenterX - player.width / 2;
-        player.y = this.y + this.height - player.height;
-        player.vx = 0;
-        player.vy = 0;
-        player.isGrounded = true;
+        // Carry player smoothly with platform vertical velocity
+        if (playerHorizOverlap && Math.abs(playerFootY - (this.y - dy)) <= 30 && player.vy >= -50) {
+          player.y = this.y - player.height;
+          player.vy = 0;
+          player.isGrounded = true;
+        }
 
-        football.x = cabinCenterX + 16;
-        football.y = this.y + this.height - football.radius * 2;
-        football.vx = 0;
-        football.vy = 0;
-        football.isGrounded = true;
+        if (ballHorizOverlap && Math.abs(ballFootY - (this.y - dy)) <= 32 && football.vy >= -50) {
+          football.y = this.y - football.radius * 2;
+          football.vy = 0;
+          football.isGrounded = true;
+        }
 
-        if (this.stateTimer >= duration) {
-          this.y = bottomCabinY;
-          this.state = 'OPENING_BOTTOM';
-          this.stateTimer = 0;
+        // Carry dogs smoothly with elevator
+        if (dogs) {
+          dogs.forEach(dog => {
+            if (!dog.isDefeated && dog.state !== 'DEAD') {
+              const dogFootY = dog.y + dog.height;
+              const dogHorizOverlap = dog.x + dog.width > this.x && dog.x < this.x + this.width;
+              if (dogHorizOverlap && Math.abs(dogFootY - (this.y - dy)) <= 32 && dog.vy >= -50) {
+                dog.y = this.y - dog.height;
+                dog.vy = 0;
+                dog.isGrounded = true;
+                dog.spawnX = dog.x;
+                dog.spawnY = dog.y;
+              }
+            }
+          });
+        }
+
+        if (this.y >= this.bottomFloorY) {
+          this.y = this.bottomFloorY;
+          this.vy = 0;
+          this.state = 'IDLE_BOTTOM';
+          this.arrivalCooldown = 0.8; // Stay parked at bottom floor
+          this.hasSteppedOffAfterArrival = false;
         }
         break;
       }
 
-      case 'OPENING_BOTTOM':
-        lockPlayer = true;
-        this.stateTimer += dt;
-        this.doorOpenProgress = Math.min(1, this.stateTimer / 0.6);
-        // Keep player on floor while opening
-        player.y = this.bottomFloorY - player.height;
-        football.y = this.bottomFloorY - football.radius * 2;
-        if (this.stateTimer >= 0.6) {
-          this.doorOpenProgress = 1;
-          this.state = 'IDLE_BOTTOM';
-          this.stateTimer = 0;
-        }
+      case 'IDLE_BOTTOM': {
+        this.y = this.bottomFloorY;
+        this.vy = 0;
         break;
-
-      case 'IDLE_BOTTOM':
-        this.y = bottomCabinY;
-        this.doorOpenProgress = 1;
-        this.travelProgress = 1;
-        break;
-
-      case 'CLOSING_BOTTOM':
-        lockPlayer = true;
-        this.stateTimer += dt;
-        this.doorOpenProgress = Math.max(0, 1 - this.stateTimer / 0.6);
-        if (this.stateTimer >= 0.6) {
-          this.state = 'ASCENDING';
-          this.stateTimer = 0;
-        }
-        break;
+      }
 
       case 'ASCENDING': {
-        lockPlayer = true;
-        this.stateTimer += dt;
-        const duration = 2.4;
-        const rawProgress = Math.min(1, this.stateTimer / duration);
-        this.travelProgress = 1 - (0.5 - 0.5 * Math.cos(rawProgress * Math.PI));
-        this.y = topCabinY + (bottomCabinY - topCabinY) * this.travelProgress;
-        this.gearRotation -= dt * 8;
+        this.vy = -this.travelSpeed;
+        const dy = this.vy * dt;
+        this.y += dy;
+        this.gearRotation -= dt * 7;
 
-        player.x = cabinCenterX - player.width / 2;
-        player.y = this.y + this.height - player.height;
-        player.vx = 0;
-        player.vy = 0;
-        player.isGrounded = true;
+        // Carry player smoothly upward
+        if (playerHorizOverlap && Math.abs(playerFootY - (this.y - dy)) <= 30 && player.vy >= -50) {
+          player.y = this.y - player.height;
+          player.vy = 0;
+          player.isGrounded = true;
+        }
 
-        football.x = cabinCenterX + 16;
-        football.y = this.y + this.height - football.radius * 2;
-        football.vx = 0;
-        football.vy = 0;
-        football.isGrounded = true;
+        if (ballHorizOverlap && Math.abs(ballFootY - (this.y - dy)) <= 32 && football.vy >= -50) {
+          football.y = this.y - football.radius * 2;
+          football.vy = 0;
+          football.isGrounded = true;
+        }
 
-        if (this.stateTimer >= duration) {
-          this.y = topCabinY;
-          this.state = 'OPENING_TOP';
-          this.stateTimer = 0;
+        // Carry dogs smoothly upward with elevator
+        if (dogs) {
+          dogs.forEach(dog => {
+            if (!dog.isDefeated && dog.state !== 'DEAD') {
+              const dogFootY = dog.y + dog.height;
+              const dogHorizOverlap = dog.x + dog.width > this.x && dog.x < this.x + this.width;
+              if (dogHorizOverlap && Math.abs(dogFootY - (this.y - dy)) <= 32 && dog.vy >= -50) {
+                dog.y = this.y - dog.height;
+                dog.vy = 0;
+                dog.isGrounded = true;
+                dog.spawnX = dog.x;
+                dog.spawnY = dog.y;
+              }
+            }
+          });
+        }
+
+        if (this.y <= this.topFloorY) {
+          this.y = this.topFloorY;
+          this.vy = 0;
+          this.state = 'IDLE_TOP';
+          this.arrivalCooldown = 0.8; // Stay parked at top floor
+          this.hasSteppedOffAfterArrival = false;
         }
         break;
       }
-
-      case 'OPENING_TOP':
-        lockPlayer = true;
-        this.stateTimer += dt;
-        this.doorOpenProgress = Math.min(1, this.stateTimer / 0.6);
-        player.y = this.topFloorY - player.height;
-        football.y = this.topFloorY - football.radius * 2;
-        if (this.stateTimer >= 0.6) {
-          this.doorOpenProgress = 1;
-          this.state = 'IDLE_TOP';
-          this.stateTimer = 0;
-        }
-        break;
     }
 
-    return { isOperating: this.isTransitioning(), lockPlayer };
+    // Player is NEVER locked - full jumping, kicking, and movement remains active
+    return { isOperating: this.isTransitioning(), lockPlayer: false };
   }
 
-  // Returns solid platform for the elevator cabin floor
+  // Returns solid platform for the moving elevator platform slab
   public toPlatform(): Platform {
     return {
-      id: this.id + '-floor',
+      id: this.id + '-slab',
       x: this.x,
-      y: this.y + this.height - 4,
+      y: this.y,
       width: this.width,
-      height: 16,
+      height: this.height,
       type: 'platform',
       color: '#334155',
       topColor: '#64748b',
@@ -255,34 +252,67 @@ export class Elevator implements Rect {
     const drawTopY = Math.floor(this.topFloorY - cameraY);
     const drawBottomY = Math.floor(this.bottomFloorY - cameraY);
 
-    if (drawX < -200 || drawX > 1365 + 200) return;
+    if (drawX < -250 || drawX > 1365 + 250) return;
 
     ctx.save();
 
-    // 1. Shaft Girders & Vertical Guide Rails
-    ctx.fillStyle = '#0f172a';
-    ctx.fillRect(drawX + 6, drawTopY - 140, 6, (drawBottomY - drawTopY) + 140);
-    ctx.fillRect(drawX + this.width - 12, drawTopY - 140, 6, (drawBottomY - drawTopY) + 140);
+    // 0. Dark Inner Shaft Background (Vacant space cutout)
+    const shaftHeight = (drawBottomY - drawTopY) + this.height + 40;
+    ctx.fillStyle = '#050c1a';
+    ctx.fillRect(drawX + 4, drawTopY, this.width - 8, shaftHeight);
 
-    // Steel Cables hanging from overhead pulley down to cabin
+    // Horizontal Steel Ribs / Girder Braces along the shaft depth
+    ctx.strokeStyle = '#1e293b';
+    ctx.lineWidth = 2;
+    for (let sy = drawTopY + 40; sy < drawBottomY; sy += 50) {
+      ctx.beginPath();
+      ctx.moveTo(drawX + 4, sy);
+      ctx.lineTo(drawX + this.width - 4, sy);
+      ctx.stroke();
+
+      // Cross Truss Bracing
+      ctx.strokeStyle = 'rgba(30, 41, 59, 0.4)';
+      ctx.beginPath();
+      ctx.moveTo(drawX + 8, sy);
+      ctx.lineTo(drawX + this.width - 8, sy + 50);
+      ctx.stroke();
+    }
+
+    // 1. Vertical Heavy Steel Shaft Guide Rails (Left & Right)
+    const railTopY = drawTopY - 120;
+    const totalRailHeight = shaftHeight + 140;
+
+    // Left Guide Rail Beam (I-Beam)
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(drawX + 8, railTopY, 8, totalRailHeight);
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(drawX + 10, railTopY, 4, totalRailHeight);
+
+    // Right Guide Rail Beam
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(drawX + this.width - 16, railTopY, 8, totalRailHeight);
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(drawX + this.width - 14, railTopY, 4, totalRailHeight);
+
+    // Steel Suspension Cables from Overhead Winch down to Platform
     ctx.strokeStyle = '#94a3b8';
     ctx.lineWidth = 2.5;
     ctx.beginPath();
-    ctx.moveTo(drawX + 30, drawTopY - 140);
-    ctx.lineTo(drawX + 30, drawY);
-    ctx.moveTo(drawX + this.width - 30, drawTopY - 140);
-    ctx.lineTo(drawX + this.width - 30, drawY);
+    ctx.moveTo(drawX + 26, railTopY);
+    ctx.lineTo(drawX + 26, drawY);
+    ctx.moveTo(drawX + this.width - 26, railTopY);
+    ctx.lineTo(drawX + this.width - 26, drawY);
     ctx.stroke();
 
-    // 2. Top Gantry Structure (Surface Winch & Pulley Wheels)
-    const gantryY = drawTopY - 140;
+    // 2. Surface Winch Gantry Header at the Top of Shaft
+    const gantryY = drawTopY - 120;
     ctx.fillStyle = '#1e293b';
-    ctx.fillRect(drawX - 10, gantryY - 18, this.width + 20, 22);
+    ctx.fillRect(drawX - 12, gantryY - 16, this.width + 24, 20);
     ctx.strokeStyle = '#475569';
     ctx.lineWidth = 2;
-    ctx.strokeRect(drawX - 10, gantryY - 18, this.width + 20, 22);
+    ctx.strokeRect(drawX - 12, gantryY - 16, this.width + 24, 20);
 
-    // Rotating Pulley Gears
+    // Rotating Cog Gears
     const drawGear = (gx: number, gy: number, radius: number) => {
       ctx.save();
       ctx.translate(gx, gy);
@@ -303,124 +333,209 @@ export class Elevator implements Rect {
       ctx.restore();
     };
 
-    drawGear(drawX + 30, gantryY, 14);
-    drawGear(drawX + this.width - 30, gantryY, 14);
+    drawGear(drawX + 26, gantryY - 6, 12);
+    drawGear(drawX + this.width - 26, gantryY - 6, 12);
 
-    // Gantry Signboard
+    // Gantry Signboard Badge
     ctx.fillStyle = '#0f172a';
-    ctx.fillRect(drawX + 8, gantryY - 38, this.width - 16, 18);
+    ctx.fillRect(drawX + 10, gantryY - 36, this.width - 20, 18);
     ctx.strokeStyle = '#38bdf8';
     ctx.lineWidth = 1.5;
-    ctx.strokeRect(drawX + 8, gantryY - 38, this.width - 16, 18);
+    ctx.strokeRect(drawX + 10, gantryY - 36, this.width - 20, 18);
     ctx.fillStyle = '#38bdf8';
     ctx.font = 'bold 8.5px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('SUBTERRANEAN LIFT', drawX + this.width / 2, gantryY - 26);
+    ctx.fillText('SUBTERRANEAN LIFT', drawX + this.width / 2, gantryY - 24);
 
-    // 3. Elevator Cabin Body
-    // Interior Shadow
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
-    ctx.fillRect(drawX + 6, drawY + 6, this.width - 12, this.height - 12);
-
-    // Back metal wall ribs
-    ctx.strokeStyle = '#1e293b';
+    // 3. MOVING LIFT PLATFORM (Open Sturdy Slab with Undercarriage)
+    // Undercarriage Steel Support Truss & Hydraulic Pistons
+    ctx.fillStyle = '#1e293b';
+    ctx.beginPath();
+    ctx.moveTo(drawX + 12, drawY + this.height);
+    ctx.lineTo(drawX + 34, drawY + this.height + 18);
+    ctx.lineTo(drawX + this.width - 34, drawY + this.height + 18);
+    ctx.lineTo(drawX + this.width - 12, drawY + this.height);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#334155';
     ctx.lineWidth = 2;
-    for (let bx = drawX + 16; bx < drawX + this.width - 10; bx += 16) {
+    ctx.stroke();
+
+    // Central Hydraulic Damper Cylinder
+    ctx.fillStyle = '#475569';
+    ctx.fillRect(drawX + this.width / 2 - 10, drawY + this.height + 2, 20, 22);
+    ctx.fillStyle = '#64748b';
+    ctx.fillRect(drawX + this.width / 2 - 6, drawY + this.height + 24, 12, 12);
+
+    // Main Platform Solid Slab Body
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(drawX, drawY, this.width, this.height);
+
+    // Top Platform Tread Surface (Anti-Slip Diamond Tread)
+    ctx.fillStyle = '#475569';
+    ctx.fillRect(drawX + 2, drawY, this.width - 4, 6);
+
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 1.5;
+    for (let tx = drawX + 10; tx < drawX + this.width - 8; tx += 12) {
       ctx.beginPath();
-      ctx.moveTo(bx, drawY + 6);
-      ctx.lineTo(bx, drawY + this.height - 6);
+      ctx.moveTo(tx, drawY + 1);
+      ctx.lineTo(tx + 4, drawY + 5);
       ctx.stroke();
     }
 
-    // Warm Brass Lantern inside cabin
-    const lanternX = drawX + this.width / 2;
-    const lanternY = drawY + 18;
-    const glow = ctx.createRadialGradient(lanternX, lanternY, 4, lanternX, lanternY, 40);
-    glow.addColorStop(0, 'rgba(250, 204, 21, 0.45)');
-    glow.addColorStop(1, 'rgba(250, 204, 21, 0)');
-    ctx.fillStyle = glow;
-    ctx.beginPath();
-    ctx.arc(lanternX, lanternY, 40, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = '#fbbf24';
-    ctx.fillRect(lanternX - 4, lanternY - 4, 8, 8);
-
-    // Cabin Structural Outer Frame (Dark Iron Beams)
-    ctx.fillStyle = '#1e293b';
-    // Roof
-    ctx.fillRect(drawX, drawY, this.width, 10);
-    // Floor
-    ctx.fillRect(drawX, drawY + this.height - 10, this.width, 10);
-    // Left & Right Pillars
-    ctx.fillRect(drawX, drawY, 8, this.height);
-    ctx.fillRect(drawX + this.width - 8, drawY, 8, this.height);
-
-    ctx.strokeStyle = '#475569';
+    // Outer Platform Frame & Edge Chamfer
+    ctx.strokeStyle = '#64748b';
     ctx.lineWidth = 2;
     ctx.strokeRect(drawX, drawY, this.width, this.height);
 
-    // 4. Sliding Accordion Iron Mesh Doors (Animate based on doorOpenProgress)
-    const doorHalfWidth = (this.width - 16) / 2;
-    const leftDoorX = drawX + 8;
-    const rightDoorX = drawX + this.width / 2;
-
-    // When doorOpenProgress = 1 (open), door width compresses to 6px on sides
-    // When doorOpenProgress = 0 (closed), door width is full doorHalfWidth
-    const currentDoorWidth = doorHalfWidth * (1 - this.doorOpenProgress * 0.85);
-
-    // Left Door Leaf
-    ctx.fillStyle = '#334155';
-    ctx.fillRect(leftDoorX, drawY + 10, currentDoorWidth, this.height - 20);
-    ctx.strokeStyle = '#64748b';
+    // Left & Right Safety Cable Anchor Brackets
+    ctx.fillStyle = '#f59e0b';
+    ctx.fillRect(drawX + 22, drawY - 6, 8, 8);
+    ctx.fillRect(drawX + this.width - 30, drawY - 6, 8, 8);
+    ctx.strokeStyle = '#b45309';
     ctx.lineWidth = 1.5;
-    ctx.strokeRect(leftDoorX, drawY + 10, currentDoorWidth, this.height - 20);
-    // Door Mesh slats
-    for (let my = drawY + 18; my < drawY + this.height - 14; my += 14) {
+    ctx.strokeRect(drawX + 22, drawY - 6, 8, 8);
+    ctx.strokeRect(drawX + this.width - 30, drawY - 6, 8, 8);
+
+    // 4. ANIMATED DIRECTIONAL STATUS INDICATOR ON PLATFORM FRONT
+    const midX = drawX + this.width / 2;
+    const midY = drawY + 12;
+    const pulse = 0.6 + 0.4 * Math.sin(this.pulseTimer);
+
+    if (this.state === 'DESCENDING') {
+      ctx.fillStyle = '#f59e0b';
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.moveTo(leftDoorX, my);
-      ctx.lineTo(leftDoorX + currentDoorWidth, my);
+      ctx.moveTo(midX - 12, midY - 3);
+      ctx.lineTo(midX, midY + 4);
+      ctx.lineTo(midX + 12, midY - 3);
       ctx.stroke();
+
+      ctx.fillStyle = `rgba(245, 158, 11, ${pulse * 0.5})`;
+      ctx.fillRect(drawX + 12, drawY + 8, this.width - 24, 6);
+    } else if (this.state === 'ASCENDING') {
+      ctx.fillStyle = '#22c55e';
+      ctx.strokeStyle = '#22c55e';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(midX - 12, midY + 4);
+      ctx.lineTo(midX, midY - 3);
+      ctx.lineTo(midX + 12, midY + 4);
+      ctx.stroke();
+
+      ctx.fillStyle = `rgba(34, 197, 94, ${pulse * 0.5})`;
+      ctx.fillRect(drawX + 12, drawY + 8, this.width - 24, 6);
+    } else if (this.state === 'IDLE_TOP') {
+      ctx.fillStyle = '#38bdf8';
+      ctx.beginPath();
+      ctx.arc(midX, midY, 4, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (this.state === 'IDLE_BOTTOM') {
+      ctx.fillStyle = '#4ade80';
+      ctx.beginPath();
+      ctx.arc(midX, midY, 4, 0, Math.PI * 2);
+      ctx.fill();
     }
 
-    // Right Door Leaf
-    const rDoorCurrentX = (drawX + this.width - 8) - currentDoorWidth;
-    ctx.fillStyle = '#334155';
-    ctx.fillRect(rDoorCurrentX, drawY + 10, currentDoorWidth, this.height - 20);
-    ctx.strokeStyle = '#64748b';
+    // 5. DRAW MECHANICAL CALL LEVER STATIONS AT BOTH FLOORS
+    // Top Call Station (Surface: X = drawX - 24, Y = drawTopY)
+    const topStationX = drawX - 24;
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(topStationX, drawTopY - 32, 16, 32);
+    ctx.strokeStyle = '#38bdf8';
     ctx.lineWidth = 1.5;
-    ctx.strokeRect(rDoorCurrentX, drawY + 10, currentDoorWidth, this.height - 20);
-    for (let my = drawY + 18; my < drawY + this.height - 14; my += 14) {
-      ctx.beginPath();
-      ctx.moveTo(rDoorCurrentX, my);
-      ctx.lineTo(rDoorCurrentX + currentDoorWidth, my);
-      ctx.stroke();
-    }
+    ctx.strokeRect(topStationX, drawTopY - 32, 16, 32);
 
-    // 5. Interactive Prompt Floating Badge (When player is near elevator)
+    // Call Station Indicator Light (Top)
+    ctx.fillStyle = this.state === 'IDLE_TOP' ? '#38bdf8' : '#eab308';
+    ctx.beginPath();
+    ctx.arc(topStationX + 8, drawTopY - 22, 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Bottom Call Station (Underground: X = drawX - 24, Y = drawBottomY)
+    const bottomStationX = drawX - 24;
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(bottomStationX, drawBottomY - 32, 16, 32);
+    ctx.strokeStyle = '#4ade80';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(bottomStationX, drawBottomY - 32, 16, 32);
+
+    // Call Station Indicator Light (Bottom)
+    ctx.fillStyle = this.state === 'IDLE_BOTTOM' ? '#4ade80' : '#eab308';
+    ctx.beginPath();
+    ctx.arc(bottomStationX + 8, drawBottomY - 22, 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 6. Interactive Floating Action Prompt (Shows [E]/[F] KEY PROMPT)
     if (this.promptAlpha > 0.01 && !this.isTransitioning()) {
       ctx.save();
       ctx.globalAlpha = this.promptAlpha;
 
-      const isTop = this.state === 'IDLE_TOP';
-      const promptText = isTop ? '▼ ENTER ELEVATOR [E] / [WALK IN] ▼' : '▲ RETURN TO SURFACE [E] / [WALK IN] ▲';
-      const promptW = 230;
-      const promptH = 26;
-      const promptX = drawX + this.width / 2 - promptW / 2;
-      const promptY = drawY - 48;
+      let actionText = '';
+      let isDescendingAction = true;
+      if (this.currentAction === 'RIDE_DOWN') {
+        actionText = 'RIDE LIFT DOWN ⬇';
+        isDescendingAction = true;
+      } else if (this.currentAction === 'CALL_DOWN') {
+        actionText = 'CALL LIFT DOWN ⬇';
+        isDescendingAction = true;
+      } else if (this.currentAction === 'RIDE_UP') {
+        actionText = 'RIDE LIFT UP ⬆';
+        isDescendingAction = false;
+      } else if (this.currentAction === 'CALL_UP') {
+        actionText = 'CALL LIFT UP ⬆';
+        isDescendingAction = false;
+      }
 
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
-      ctx.strokeStyle = isTop ? '#38bdf8' : '#4ade80';
-      ctx.lineWidth = 2;
+      if (!actionText) {
+        ctx.restore();
+        return;
+      }
+
+      // Decide target display Y based on where the elevator is
+      const promptY = drawY - 42;
+      const keyBoxW = 34;
+      const keyBoxH = 20;
+      const promptW = 210;
+      const promptH = 30;
+      const promptX = drawX + this.width / 2 - promptW / 2;
+
+      // Glow backing
+      ctx.shadowColor = isDescendingAction ? '#0284c7' : '#16a34a';
+      ctx.shadowBlur = 10;
+
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
+      ctx.strokeStyle = isDescendingAction ? '#38bdf8' : '#4ade80';
+      ctx.lineWidth = 1.8;
       ctx.beginPath();
       ctx.roundRect(promptX, promptY, promptW, promptH, 6);
       ctx.fill();
       ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      // [F] Key Tag
+      const kX = promptX + 6;
+      const kY = promptY + 5;
+      ctx.fillStyle = isDescendingAction ? '#0284c7' : '#15803d';
+      ctx.beginPath();
+      ctx.roundRect(kX, kY, keyBoxW, keyBoxH, 4);
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
 
       ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 10px monospace';
+      ctx.font = 'bold 11px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText(promptText, promptX + promptW / 2, promptY + 17);
+      ctx.fillText('[F]', kX + keyBoxW / 2, kY + 14);
+
+      // Action Label
+      ctx.fillStyle = isDescendingAction ? '#e0f2fe' : '#dcfce7';
+      ctx.font = 'bold 10.5px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText(actionText, kX + keyBoxW + 8, promptY + 19);
 
       ctx.restore();
     }
@@ -428,3 +543,5 @@ export class Elevator implements Rect {
     ctx.restore();
   }
 }
+
+

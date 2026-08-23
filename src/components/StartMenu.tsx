@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Play, RotateCcw, Settings, LogOut, Volume2, VolumeX, Shield, Sparkles, Check, X } from 'lucide-react';
+import { Play, RotateCcw, Settings, LogOut, Volume2, VolumeX, Shield, Sparkles, Check, X, Compass, Map } from 'lucide-react';
 import { SaveManager } from '../game/SaveManager';
 
 interface StartMenuProps {
@@ -8,6 +8,7 @@ interface StartMenuProps {
   onNewGame: () => void;
   onLoadGame: () => void;
   onResumeGame?: () => void;
+  onOpenLevelSelect?: () => void;
   hasActiveGame?: boolean;
 }
 
@@ -16,6 +17,7 @@ export const StartMenu: React.FC<StartMenuProps> = ({
   onNewGame,
   onLoadGame,
   onResumeGame,
+  onOpenLevelSelect,
   hasActiveGame = false,
 }) => {
   const [hasSave, setHasSave] = useState(false);
@@ -155,18 +157,42 @@ export const StartMenu: React.FC<StartMenuProps> = ({
               </p>
             </div>
             <div className="w-[320px] space-y-3">
-              <div className="p-3 bg-slate-800/80 border border-lime-400/50 rounded-xl text-center font-bold text-lime-300 text-lg shadow-lg">
+              <button
+                onClick={handleNewGame}
+                className="w-full p-3 bg-slate-800/80 hover:bg-slate-700 border border-lime-400/50 rounded-xl text-center font-bold text-lime-300 text-lg shadow-lg cursor-pointer transition-all"
+              >
                 NEW GAME
-              </div>
-              <div className="p-3 bg-slate-800/80 border border-sky-400/50 rounded-xl text-center font-bold text-sky-300 text-lg shadow-lg">
+              </button>
+              <button
+                onClick={handleLoadGame}
+                className="w-full p-3 bg-slate-800/80 hover:bg-slate-700 border border-sky-400/50 rounded-xl text-center font-bold text-sky-300 text-lg shadow-lg cursor-pointer transition-all"
+              >
                 LOAD GAME
-              </div>
-              <div className="p-3 bg-slate-800/80 border border-amber-400/50 rounded-xl text-center font-bold text-amber-300 text-lg shadow-lg">
+              </button>
+              {onOpenLevelSelect && (
+                <button
+                  onClick={() => {
+                    playClickSound();
+                    onOpenLevelSelect();
+                  }}
+                  className="w-full p-3 bg-indigo-900/60 hover:bg-indigo-800/80 border border-indigo-400/60 rounded-xl text-center font-bold text-indigo-200 text-lg shadow-lg cursor-pointer transition-all flex items-center justify-center gap-2"
+                >
+                  <Compass className="w-5 h-5 text-indigo-300" />
+                  <span>LEVEL SELECT & BOSS TEST</span>
+                </button>
+              )}
+              <button
+                onClick={handleOptions}
+                className="w-full p-3 bg-slate-800/80 hover:bg-slate-700 border border-amber-400/50 rounded-xl text-center font-bold text-amber-300 text-lg shadow-lg cursor-pointer transition-all"
+              >
                 OPTION
-              </div>
-              <div className="p-3 bg-slate-800/80 border border-rose-400/50 rounded-xl text-center font-bold text-rose-300 text-lg shadow-lg">
+              </button>
+              <button
+                onClick={handleQuit}
+                className="w-full p-3 bg-slate-800/80 hover:bg-slate-700 border border-rose-400/50 rounded-xl text-center font-bold text-rose-300 text-lg shadow-lg cursor-pointer transition-all"
+              >
                 QUIT
-              </div>
+              </button>
             </div>
           </div>
         )}
@@ -182,6 +208,21 @@ export const StartMenu: React.FC<StartMenuProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {onOpenLevelSelect && (
+              <button
+                id="btn-menu-level-select"
+                onClick={() => {
+                  playClickSound();
+                  onOpenLevelSelect();
+                }}
+                className="px-3.5 py-1.5 rounded-full bg-indigo-600/90 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-indigo-950/60 transition-all border border-indigo-400/40 cursor-pointer"
+                title="Select Level & Boss Arena Test Menu"
+              >
+                <Compass className="w-3.5 h-3.5 text-indigo-300" />
+                <span>Level Select / Test</span>
+              </button>
+            )}
+
             {hasActiveGame && onResumeGame && (
               <button
                 id="btn-resume-game"
@@ -293,12 +334,28 @@ export const StartMenu: React.FC<StartMenuProps> = ({
         </div>
 
         {/* Bottom Helper Info */}
-        <div className="absolute bottom-3 left-6 text-[11px] text-slate-400/80 flex items-center gap-4 pointer-events-none">
-          <span>Click any option or press key to interact</span>
-          {hoveredButton && (
-            <span className="text-amber-300 font-bold uppercase tracking-wider">
-              ✦ Selected: {hoveredButton.replace('_', ' ')}
-            </span>
+        <div className="absolute bottom-3 left-6 right-6 flex items-center justify-between text-[11px] text-slate-400/80">
+          <div className="flex items-center gap-4 pointer-events-none">
+            <span>Click any option or press key to interact</span>
+            {hoveredButton && (
+              <span className="text-amber-300 font-bold uppercase tracking-wider">
+                ✦ Selected: {hoveredButton.replace('_', ' ')}
+              </span>
+            )}
+          </div>
+
+          {onOpenLevelSelect && (
+            <button
+              onClick={() => {
+                playClickSound();
+                onOpenLevelSelect();
+              }}
+              className="pointer-events-auto px-3 py-1 rounded-full bg-slate-950/80 hover:bg-slate-800 text-indigo-300 hover:text-white border border-indigo-500/40 font-bold text-[11px] flex items-center gap-1.5 transition-all cursor-pointer shadow-md backdrop-blur-sm"
+              title="Open Level Selection & Boss Battle Testing"
+            >
+              <Compass className="w-3.5 h-3.5 text-indigo-400" />
+              <span>🎮 Level & Boss Test Menu</span>
+            </button>
           )}
         </div>
       </div>

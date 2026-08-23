@@ -7,6 +7,158 @@ export interface FrameRect {
   height: number;
 }
 
+// Pre-calibrated pixel-perfect frame coordinates for all bundled sprite assets
+const KNOWN_FRAMES: Record<string, FrameRect[]> = {
+  'character.png': [{ x: 315, y: 51, width: 580, height: 1247 }],
+  'idle.png': [
+    { x: 461, y: 28, width: 73, height: 152 },
+    { x: 666, y: 28, width: 73, height: 152 },
+    { x: 871, y: 28, width: 73, height: 152 },
+    { x: 1076, y: 28, width: 73, height: 152 },
+    { x: 1280, y: 28, width: 73, height: 152 },
+    { x: 461, y: 233, width: 73, height: 152 },
+    { x: 666, y: 233, width: 73, height: 152 },
+    { x: 871, y: 233, width: 73, height: 152 },
+    { x: 1076, y: 233, width: 73, height: 152 },
+    { x: 1280, y: 233, width: 73, height: 152 },
+    { x: 461, y: 438, width: 73, height: 152 },
+    { x: 666, y: 438, width: 73, height: 152 },
+    { x: 871, y: 438, width: 73, height: 152 },
+    { x: 1076, y: 438, width: 73, height: 152 },
+    { x: 1280, y: 438, width: 73, height: 152 },
+    { x: 461, y: 643, width: 73, height: 151 },
+    { x: 666, y: 643, width: 73, height: 151 },
+    { x: 871, y: 643, width: 73, height: 151 },
+    { x: 1075, y: 643, width: 74, height: 151 },
+    { x: 1280, y: 643, width: 73, height: 151 },
+    { x: 461, y: 847, width: 73, height: 152 },
+    { x: 666, y: 847, width: 73, height: 152 },
+    { x: 871, y: 847, width: 73, height: 152 },
+  ],
+  'run.png': [
+    { x: 441, y: 26, width: 114, height: 144 },
+    { x: 645, y: 26, width: 113, height: 147 },
+    { x: 862, y: 31, width: 95, height: 155 },
+    { x: 1071, y: 32, width: 90, height: 158 },
+    { x: 1263, y: 25, width: 104, height: 154 },
+    { x: 441, y: 229, width: 113, height: 146 },
+    { x: 652, y: 235, width: 101, height: 154 },
+    { x: 865, y: 237, width: 92, height: 158 },
+    { x: 1064, y: 231, width: 102, height: 155 },
+    { x: 1260, y: 231, width: 113, height: 144 },
+    { x: 445, y: 438, width: 105, height: 156 },
+    { x: 662, y: 441, width: 90, height: 159 },
+    { x: 856, y: 434, width: 101, height: 156 },
+    { x: 1054, y: 434, width: 115, height: 145 },
+    { x: 1265, y: 440, width: 103, height: 154 },
+    { x: 456, y: 647, width: 91, height: 158 },
+    { x: 656, y: 641, width: 100, height: 158 },
+    { x: 851, y: 640, width: 113, height: 145 },
+    { x: 1060, y: 643, width: 104, height: 156 },
+    { x: 1276, y: 646, width: 90, height: 159 },
+    { x: 444, y: 844, width: 104, height: 154 },
+    { x: 645, y: 844, width: 114, height: 145 },
+    { x: 856, y: 849, width: 102, height: 155 },
+    { x: 1070, y: 852, width: 91, height: 157 },
+  ],
+  'jump.png': [
+    { x: 453, y: 238, width: 94, height: 146 },
+    { x: 660, y: 236, width: 92, height: 149 },
+    { x: 869, y: 224, width: 85, height: 157 },
+    { x: 1067, y: 216, width: 93, height: 153 },
+    { x: 1269, y: 211, width: 97, height: 149 },
+    { x: 448, y: 414, width: 103, height: 147 },
+    { x: 653, y: 414, width: 102, height: 151 },
+    { x: 859, y: 417, width: 96, height: 160 },
+    { x: 1071, y: 427, width: 90, height: 162 },
+    { x: 1274, y: 436, width: 92, height: 153 },
+    { x: 455, y: 645, width: 92, height: 149 },
+    { x: 660, y: 644, width: 92, height: 150 },
+    { x: 865, y: 642, width: 90, height: 152 },
+    { x: 1070, y: 640, width: 90, height: 154 },
+    { x: 1276, y: 639, width: 88, height: 155 },
+    { x: 457, y: 843, width: 88, height: 156 },
+    { x: 661, y: 843, width: 89, height: 156 },
+    { x: 865, y: 844, width: 91, height: 155 },
+    { x: 1070, y: 845, width: 91, height: 154 },
+    { x: 1274, y: 847, width: 93, height: 152 },
+  ],
+  'kick.png': [
+    { x: 42, y: 379, width: 112, height: 232 },
+    { x: 257, y: 378, width: 119, height: 232 },
+    { x: 439, y: 378, width: 129, height: 232 },
+    { x: 639, y: 379, width: 134, height: 231 },
+    { x: 844, y: 379, width: 202, height: 232 },
+    { x: 1076, y: 379, width: 170, height: 232 },
+    { x: 1294, y: 379, width: 113, height: 232 },
+    { x: 1493, y: 379, width: 111, height: 232 },
+  ],
+  'climb.png': [
+    { x: 26, y: 387, width: 120, height: 264 },
+    { x: 235, y: 387, width: 133, height: 259 },
+    { x: 442, y: 378, width: 127, height: 255 },
+    { x: 655, y: 360, width: 114, height: 256 },
+    { x: 857, y: 368, width: 179, height: 201 },
+    { x: 1089, y: 382, width: 160, height: 171 },
+    { x: 1323, y: 368, width: 129, height: 191 },
+    { x: 1529, y: 349, width: 101, height: 210 },
+  ],
+  'dog_run.png': [
+    { x: 28, y: 59, width: 470, height: 292 },
+    { x: 540, y: 109, width: 474, height: 249 },
+    { x: 1034, y: 96, width: 529, height: 228 },
+    { x: 1587, y: 89, width: 475, height: 266 },
+    { x: 13, y: 405, width: 464, height: 297 },
+    { x: 535, y: 432, width: 480, height: 244 },
+    { x: 1039, y: 429, width: 518, height: 229 },
+    { x: 1579, y: 411, width: 485, height: 291 },
+  ],
+  'dog_enemy.png': [{ x: 147, y: 245, width: 1252, height: 549 }],
+  'rat_idle.png': [
+    { x: 85, y: 25, width: 624, height: 441 },
+    { x: 845, y: 23, width: 633, height: 444 },
+    { x: 86, y: 520, width: 624, height: 444 },
+    { x: 850, y: 519, width: 628, height: 446 },
+  ],
+  'rat_run.png': [
+    { x: 16, y: 162, width: 409, height: 284 },
+    { x: 392, y: 171, width: 423, height: 275 },
+    { x: 799, y: 190, width: 383, height: 257 },
+    { x: 1164, y: 186, width: 361, height: 263 },
+  ],
+  'rat_jump.png': [
+    { x: 32, y: 184, width: 453, height: 264 },
+    { x: 513, y: 131, width: 514, height: 303 },
+    { x: 1059, y: 30, width: 455, height: 386 },
+    { x: 487, y: 630, width: 505, height: 295 },
+  ],
+  'rat_attack.png': [
+    { x: 109, y: 9, width: 633, height: 454 },
+    { x: 809, y: 48, width: 823, height: 405 },
+    { x: 35, y: 441, width: 824, height: 490 },
+    { x: 964, y: 495, width: 674, height: 422 },
+  ],
+  'rat_block.png': [
+    { x: 91, y: 58, width: 618, height: 413 },
+    { x: 857, y: 16, width: 611, height: 464 },
+    { x: 0, y: 463, width: 767, height: 511 },
+    { x: 868, y: 496, width: 628, height: 480 },
+  ],
+  'rat_boss.png': [{ x: 67, y: 75, width: 1273, height: 972 }],
+};
+
+function getAssetFileName(url: string): string | null {
+  if (!url || typeof url !== 'string' || url.startsWith('data:')) return null;
+  try {
+    const cleanUrl = url.split('?')[0].split('#')[0];
+    const parts = cleanUrl.split('/');
+    const last = parts[parts.length - 1];
+    return last || null;
+  } catch {
+    return null;
+  }
+}
+
 export class SpriteSheet {
   public image: HTMLImageElement | null = null;
   public isLoaded = false;
@@ -39,6 +191,9 @@ export class SpriteSheet {
       this.retryTimeout = null;
     }
 
+    const fileName = getAssetFileName(url);
+    const known = fileName ? KNOWN_FRAMES[fileName] : null;
+
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => {
@@ -46,20 +201,50 @@ export class SpriteSheet {
       this.frameHeight = img.naturalHeight || 64;
       this.retryCount = 0;
 
-      // Extract frame bounding boxes via canvas pixel analysis
+      // 1. If known standard asset with pre-calibrated frame rects, load immediately with guaranteed pixel accuracy
+      if (known && known.length > 0 && (!explicitFrameCount || explicitFrameCount === known.length || known.length === 1)) {
+        this.frames = known.map(f => ({ ...f }));
+        this.frameCount = this.frames.length;
+        this.frameWidth = this.frames[0].width;
+        this.frameHeight = this.frames[0].height;
+        this.isLoaded = true;
+        return;
+      }
+
+      const targetCount = explicitFrameCount ?? this.config.frameCount;
+      if (targetCount === 1) {
+        try {
+          const detected = this.detectFrames(img, 1);
+          if (detected.length >= 1) {
+            this.frames = detected;
+            this.frameCount = 1;
+            this.frameWidth = detected[0].width;
+            this.frameHeight = detected[0].height;
+            this.isLoaded = true;
+            return;
+          }
+        } catch {
+          // ignore
+        }
+        this.fallbackSlicing(img, 1);
+        this.isLoaded = true;
+        return;
+      }
+
+      // Extract frame bounding boxes via canvas pixel analysis or fallback slicing
       try {
-        const detectedFrames = this.detectFrames(img, explicitFrameCount);
-        if (detectedFrames.length > 0) {
+        const detectedFrames = this.detectFrames(img, targetCount);
+        if (detectedFrames.length >= 1) {
           this.frames = detectedFrames;
           this.frameCount = detectedFrames.length;
           this.frameWidth = detectedFrames[0].width;
           this.frameHeight = detectedFrames[0].height;
         } else {
-          this.fallbackSlicing(img, explicitFrameCount);
+          this.fallbackSlicing(img, targetCount || 5);
         }
       } catch (err) {
         console.warn('Canvas frame detection fallback:', err);
-        this.fallbackSlicing(img, explicitFrameCount);
+        this.fallbackSlicing(img, targetCount || 5);
       }
 
       this.isLoaded = true;
@@ -107,6 +292,167 @@ export class SpriteSheet {
     }
   }
 
+  private detectConnectedFrames(data: Uint8ClampedArray, width: number, height: number): FrameRect[] {
+    const visited = new Uint8Array(width * height);
+    const rawBoxes: { minX: number; maxX: number; minY: number; maxY: number; w: number; h: number; count: number }[] = [];
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const idx = y * width + x;
+        if (visited[idx] === 0 && data[idx * 4 + 3] > 25) {
+          let minX = x;
+          let maxX = x;
+          let minY = y;
+          let maxY = y;
+          let count = 0;
+          const queue = [x, y];
+          visited[idx] = 1;
+          let qHead = 0;
+
+          while (qHead < queue.length) {
+            const cx = queue[qHead++];
+            const cy = queue[qHead++];
+            count++;
+            if (cx < minX) minX = cx;
+            if (cx > maxX) maxX = cx;
+            if (cy < minY) minY = cy;
+            if (cy > maxY) maxY = cy;
+
+            for (let dy = -4; dy <= 4; dy++) {
+              const ny = cy + dy;
+              if (ny < 0 || ny >= height) continue;
+              for (let dx = -4; dx <= 4; dx++) {
+                const nx = cx + dx;
+                if (nx < 0 || nx >= width) continue;
+                const nidx = ny * width + nx;
+                if (visited[nidx] === 0 && data[nidx * 4 + 3] > 25) {
+                  visited[nidx] = 1;
+                  queue.push(nx, ny);
+                }
+              }
+            }
+          }
+
+          if (count > 250) {
+            rawBoxes.push({ minX, maxX, minY, maxY, w: maxX - minX + 1, h: maxY - minY + 1, count });
+          }
+        }
+      }
+    }
+
+    if (rawBoxes.length === 0) return [];
+
+    const merged: { minX: number; maxX: number; minY: number; maxY: number; w: number; h: number; count: number }[] = [];
+    for (const box of rawBoxes) {
+      let mergedInto: (typeof merged)[0] | null = null;
+      for (const m of merged) {
+        const overlapX = !(box.maxX < m.minX - 10 || box.minX > m.maxX + 10);
+        const overlapY = !(box.maxY < m.minY - 10 || box.minY > m.maxY + 10);
+        if (overlapX && overlapY) {
+          mergedInto = m;
+          break;
+        }
+      }
+      if (mergedInto) {
+        mergedInto.minX = Math.min(mergedInto.minX, box.minX);
+        mergedInto.maxX = Math.max(mergedInto.maxX, box.maxX);
+        mergedInto.minY = Math.min(mergedInto.minY, box.minY);
+        mergedInto.maxY = Math.max(mergedInto.maxY, box.maxY);
+        mergedInto.w = mergedInto.maxX - mergedInto.minX + 1;
+        mergedInto.h = mergedInto.maxY - mergedInto.minY + 1;
+        mergedInto.count += box.count;
+      } else {
+        merged.push({ ...box });
+      }
+    }
+
+    // Sort top-to-bottom, left-to-right
+    merged.sort((a, b) => {
+      const aCenterY = a.minY + a.h / 2;
+      const bCenterY = b.minY + b.h / 2;
+      const rowThreshold = Math.min(a.h, b.h) * 0.45;
+      if (Math.abs(aCenterY - bCenterY) > rowThreshold) {
+        return aCenterY - bCenterY;
+      }
+      return a.minX - b.minX;
+    });
+
+    return merged.map(b => {
+      const pad = 2;
+      const fx = Math.max(0, b.minX - pad);
+      const fy = Math.max(0, b.minY - pad);
+      const fw = Math.min(width - fx, b.w + pad * 2);
+      const fh = Math.min(height - fy, b.h + pad * 2);
+      return { x: fx, y: fy, width: fw, height: fh };
+    });
+  }
+
+  private detectProjectionFrames(data: Uint8ClampedArray, width: number, height: number, count?: number): FrameRect[] {
+    const colCounts = new Array(width).fill(0);
+    const rowCounts = new Array(height).fill(0);
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const idx = (y * width + x) * 4 + 3;
+        if (data[idx] > 25) {
+          colCounts[x]++;
+          rowCounts[y]++;
+        }
+      }
+    }
+
+    // Find horizontal row bands
+    const rowBands: { start: number; end: number }[] = [];
+    let inRow = false;
+    let rStart = 0;
+    for (let y = 0; y < height; y++) {
+      if (!inRow && rowCounts[y] > 20) {
+        inRow = true;
+        rStart = y;
+      } else if (inRow && rowCounts[y] <= 20) {
+        inRow = false;
+        if (y - rStart > 30) rowBands.push({ start: rStart, end: y });
+      }
+    }
+    if (inRow && height - rStart > 30) rowBands.push({ start: rStart, end: height });
+
+    const frames: FrameRect[] = [];
+    for (const rb of rowBands) {
+      let inCol = false;
+      let cStart = 0;
+      for (let x = 0; x < width; x++) {
+        let active = 0;
+        for (let y = rb.start; y < rb.end; y++) {
+          if (data[(y * width + x) * 4 + 3] > 25) active++;
+        }
+        if (!inCol && active > 10) {
+          inCol = true;
+          cStart = x;
+        } else if (inCol && active <= 10) {
+          inCol = false;
+          if (x - cStart > 25) {
+            frames.push({
+              x: Math.max(0, cStart - 2),
+              y: Math.max(0, rb.start - 2),
+              width: Math.min(width - cStart + 2, x - cStart + 4),
+              height: Math.min(height - rb.start + 2, rb.end - rb.start + 4),
+            });
+          }
+        }
+      }
+      if (inCol && width - cStart > 25) {
+        frames.push({
+          x: Math.max(0, cStart - 2),
+          y: Math.max(0, rb.start - 2),
+          width: Math.min(width - cStart + 2, width - cStart + 2),
+          height: Math.min(height - rb.start + 2, rb.end - rb.start + 4),
+        });
+      }
+    }
+
+    return frames;
+  }
+
   private detectFrames(img: HTMLImageElement, explicitFrameCount?: number): FrameRect[] {
     const canvas = document.createElement('canvas');
     canvas.width = img.naturalWidth;
@@ -118,131 +464,48 @@ export class SpriteSheet {
     const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const { data, width, height } = imgData;
 
-    // Project alpha on X-axis and Y-axis to detect discrete 2D grid cells
-    const xProj = new Int32Array(width);
-    const yProj = new Int32Array(height);
+    const targetCount = explicitFrameCount ?? this.config.frameCount;
 
-    for (let y = 0; y < height; y++) {
-      const rowOffset = y * width * 4;
-      for (let x = 0; x < width; x++) {
-        if (data[rowOffset + x * 4 + 3] > 25) {
-          xProj[x]++;
-          yProj[y]++;
-        }
+    // 1. Try Connected Pixel Island Extraction first
+    const connFrames = this.detectConnectedFrames(data, width, height);
+    if (connFrames.length > 0) {
+      if (targetCount === 1 && connFrames.length === 1) {
+        return connFrames;
+      }
+      if (!targetCount || connFrames.length === targetCount) {
+        return connFrames;
+      }
+      if (connFrames.length > 1 && (!targetCount || Math.abs(connFrames.length - targetCount) <= 2)) {
+        return connFrames;
       }
     }
 
-    function getRanges(arr: Int32Array, thresh: number = 8, minLen: number = 10) {
-      const ranges: { start: number; end: number }[] = [];
-      let inR = false;
-      let s = 0;
-      for (let i = 0; i < arr.length; i++) {
-        if (arr[i] > thresh) {
-          if (!inR) {
-            inR = true;
-            s = i;
-          }
-        } else {
-          if (inR) {
-            inR = false;
-            if (i - s >= minLen) {
-              ranges.push({ start: s, end: i });
-            }
-          }
-        }
-      }
-      if (inR && arr.length - s >= minLen) {
-        ranges.push({ start: s, end: arr.length - 1 });
-      }
-      return ranges;
-    }
-
-    const xRanges = getRanges(xProj, 8, 12);
-    const yRanges = getRanges(yProj, 8, 12);
-
-    if (xRanges.length === 0 || yRanges.length === 0) {
-      return [{ x: 0, y: 0, width, height }];
-    }
-
-    // Single character image (like character.png)
-    if (xRanges.length === 1 && yRanges.length === 1) {
-      const xr = xRanges[0];
-      const yr = yRanges[0];
-      let minX = xr.end;
-      let maxX = xr.start;
-      let minY = yr.end;
-      let maxY = yr.start;
-      for (let y = yr.start; y <= yr.end; y++) {
-        const rowOffset = y * width * 4;
-        for (let x = xr.start; x <= xr.end; x++) {
-          if (data[rowOffset + x * 4 + 3] > 25) {
-            if (x < minX) minX = x;
-            if (x > maxX) maxX = x;
-            if (y < minY) minY = y;
-            if (y > maxY) maxY = y;
-          }
-        }
-      }
-      return [{
-        x: Math.max(0, minX),
-        y: Math.max(0, minY),
-        width: Math.max(1, maxX - minX + 1),
-        height: Math.max(1, maxY - minY + 1),
-      }];
-    }
-
-    // For multi-frame spritesheets (e.g. 5x5 idle.png, run.png, jump.png, or 1x8 climb.png, kick.png):
-    // Filter out slivers/artifacts (< 50px wide or high for full sprite frames)
-    const frames: FrameRect[] = [];
-
-    for (const yr of yRanges) {
-      for (const xr of xRanges) {
-        let minX = xr.end;
-        let maxX = xr.start;
-        let minY = yr.end;
-        let maxY = yr.start;
-        let pixelCount = 0;
-
-        for (let y = yr.start; y <= yr.end; y++) {
-          const rowOffset = y * width * 4;
-          for (let x = xr.start; x <= xr.end; x++) {
-            if (data[rowOffset + x * 4 + 3] > 25) {
-              pixelCount++;
-              if (x < minX) minX = x;
-              if (x > maxX) maxX = x;
-              if (y < minY) minY = y;
-              if (y > maxY) maxY = y;
-            }
-          }
-        }
-
-        const fw = maxX - minX + 1;
-        const fh = maxY - minY + 1;
-
-        // Only include complete sprite cells (ignore tiny debris / edge artifacts)
-        if (pixelCount > 1500 && fw >= 40 && fh >= 80) {
-          const pad = 1;
-          const fx = Math.max(0, minX - pad);
-          const fy = Math.max(0, minY - pad);
-          const finalW = Math.min(width - fx, fw + pad * 2);
-          const finalH = Math.min(height - fy, fh + pad * 2);
-
-          frames.push({
-            x: fx,
-            y: fy,
-            width: Math.max(1, finalW),
-            height: Math.max(1, finalH),
-          });
-        }
+    // 2. Try Projection Slicing
+    const projFrames = this.detectProjectionFrames(data, width, height, targetCount);
+    if (projFrames.length > 0) {
+      if (!targetCount || projFrames.length === targetCount || Math.abs(projFrames.length - targetCount) <= 2) {
+        return projFrames;
       }
     }
 
-    // If explicitFrameCount is set and matches a subset or custom count, handle gracefully
-    if (explicitFrameCount && explicitFrameCount > 0 && explicitFrameCount < frames.length) {
-      return frames.slice(0, explicitFrameCount);
+    if (connFrames.length > 0) {
+      return connFrames;
+    }
+    if (projFrames.length > 0) {
+      return projFrames;
     }
 
-    return frames.length > 0 ? frames : [{ x: 0, y: 0, width, height }];
+    // 3. Equal-width fallback
+    if (targetCount && targetCount > 1) {
+      const fw = width / targetCount;
+      const fallback: FrameRect[] = [];
+      for (let i = 0; i < targetCount; i++) {
+        fallback.push({ x: i * fw, y: 0, width: fw, height });
+      }
+      return fallback;
+    }
+
+    return [{ x: 0, y: 0, width, height }];
   }
 
   public reset() {
@@ -312,14 +575,13 @@ export class SpriteSheet {
     const sw = frame.width;
     const sh = frame.height;
 
-    // Normalizing character render height across all animations:
-    // Standard standing character height reference is 148px (from idle/run/jump)
-    // If an animation sheet has taller frames (e.g. climb with extended arms or high kick),
-    // scale proportional to standing reference so the character body stays identical in size.
-    const refStandingHeight = (sh > 200) ? 228 : (sh > 160) ? 175 : 148;
-    const baseScale = dh / refStandingHeight;
-    const renderW = Math.round(sw * baseScale);
-    const renderH = Math.round(sh * baseScale);
+    let renderW: number;
+    let renderH: number;
+    const aspect = (sh > 0) ? (sw / sh) : 0.8;
+    
+    // Scale sprite to fit the target height while maintaining natural aspect ratio
+    renderH = dh;
+    renderW = Math.max(24, Math.round(dh * aspect));
 
     // Center horizontally relative to player bounding box, bottom-align vertically with feet
     const renderX = Math.round(dx + (dw - renderW) / 2);
@@ -487,3 +749,4 @@ export class SpriteSheet {
     ctx.restore();
   }
 }
+

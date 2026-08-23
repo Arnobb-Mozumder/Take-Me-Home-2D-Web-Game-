@@ -50,6 +50,10 @@ export class Player {
   public maxHealth = 100;
   public invincibilityTimer = 0;
 
+  public get isInvincible(): boolean {
+    return this.invincibilityTimer > 0;
+  }
+
   // Kick Power Charging & Speed Meter
   public kickPower = 0.85; // Power ratio from 0.35 to 1.0
   public isChargingKick = false;
@@ -91,31 +95,36 @@ export class Player {
     // Sprite animation instances matching the user's custom sprite sheets
     this.idleSprite = new SpriteSheet({
       url: getAssetPath('idle.png'),
+      frameCount: 23,
       frameDuration: 0.08,
       loop: true,
     });
 
     this.runSprite = new SpriteSheet({
       url: getAssetPath('run.png'),
-      frameDuration: 0.06,
+      frameCount: 24,
+      frameDuration: 0.045,
       loop: true,
     });
 
     this.jumpSprite = new SpriteSheet({
       url: getAssetPath('jump.png'),
-      frameDuration: 0.07,
+      frameCount: 20,
+      frameDuration: 0.045,
       loop: false,
     });
 
     this.kickSprite = new SpriteSheet({
       url: getAssetPath('kick.png'),
-      frameDuration: 0.06,
+      frameCount: 8,
+      frameDuration: 0.07,
       loop: false,
     });
 
     this.climbSprite = new SpriteSheet({
       url: getAssetPath('climb.png'),
-      frameDuration: 0.05,
+      frameCount: 8,
+      frameDuration: 0.07,
       loop: false,
     });
 
@@ -123,6 +132,38 @@ export class Player {
 
     // Automatically load any saved custom sprites & animations from SaveManager
     this.loadSavedSprites();
+
+    // Listen for live SaveManager updates
+    SaveManager.addSpriteChangeListener((type, config) => {
+      const defaultUrl = getAssetPath(`${type}.png`);
+      const defaultFrames =
+        type === 'character' ? 1 : type === 'idle' ? 23 : type === 'run' ? 24 : type === 'jump' ? 20 : type === 'kick' ? 8 : type === 'climb' ? 8 : 1;
+      const url = config?.dataUrl || defaultUrl;
+      const count = config?.frameCount || defaultFrames;
+      if (type === 'character') this.characterSprite.load(url, count);
+      else if (type === 'idle') this.idleSprite.load(url, count);
+      else if (type === 'run') this.runSprite.load(url, count);
+      else if (type === 'jump') this.jumpSprite.load(url, count);
+      else if (type === 'kick') this.kickSprite.load(url, count);
+      else if (type === 'climb') this.climbSprite.load(url, count);
+    });
+  }
+
+  public getActiveSprite(): SpriteSheet {
+    if (this.state === 'CLIMB') {
+      return this.climbSprite.isLoaded ? this.climbSprite : this.characterSprite.isLoaded ? this.characterSprite : this.climbSprite;
+    }
+    if (this.state === 'KICK') {
+      return this.kickSprite.isLoaded ? this.kickSprite : this.characterSprite.isLoaded ? this.characterSprite : this.kickSprite;
+    }
+    if (this.state === 'JUMP') {
+      return this.jumpSprite.isLoaded ? this.jumpSprite : this.characterSprite.isLoaded ? this.characterSprite : this.jumpSprite;
+    }
+    if (this.state === 'RUN') {
+      return this.runSprite.isLoaded ? this.runSprite : this.characterSprite.isLoaded ? this.characterSprite : this.runSprite;
+    }
+    // IDLE state
+    return this.idleSprite.isLoaded ? this.idleSprite : this.characterSprite.isLoaded ? this.characterSprite : this.idleSprite;
   }
 
   public loadSavedSprites() {
@@ -176,7 +217,7 @@ export class Player {
     };
     const defaultUrl = getAssetPath(`${type}.png`);
     const defaultCount =
-      type === 'character' ? 1 : type === 'idle' ? 5 : type === 'run' ? 5 : type === 'jump' ? 5 : 8;
+      type === 'character' ? 1 : type === 'idle' ? 23 : type === 'run' ? 24 : type === 'jump' ? 20 : type === 'kick' ? 8 : type === 'climb' ? 8 : 1;
     this.setCustomSprite(type, defaultUrl, defaultCount, false);
   }
 
@@ -279,6 +320,66 @@ export class Player {
     const playerFootY = this.y + this.height - 15;
     const dist = Math.hypot(football.getCenterX() - playerFootX, football.getCenterY() - playerFootY);
     return dist <= this.kickRadius;
+  }
+
+  public isTouchingFootball(football: Football): boolean {
+    const ballDiameter = football.radius * 2;
+    const playerBox: Rect = {
+      x: this.x - 8,
+      y: this.y,
+      width: this.width + 16,
+      height: this.height + 8,
+    };
+    const footBox: Rect = {
+      x: football.x,
+      y: football.y,
+      width: ballDiameter,
+      height: ballDiameter,
+    };
+    return this.physics.checkAABB(playerBox, footBox);
+  }
+
+  public rotateBallToFacingDirection(football: Football, platforms: Platform[] = []) {
+    const ballDiameter = football.radius * 2;
+    if (this.facingRight) {
+      // Rotated right -> rotate ball clockwise
+      football.rotation += Math.PI * 0.75;
+      let targetBallX = this.x + this.width - 2;
+
+      // Ensure ball doesn't clip into platform walls on the right
+      const testBox: Rect = { x: targetBallX, y: football.y, width: ballDiameter, height: ballDiameter };
+      for (const plat of platforms) {
+        const hasVerticalOverlap = (football.y + ballDiameter > plat.y + 4) && (football.y < plat.y + plat.height - 4);
+        if (hasVerticalOverlap && this.physics.checkAABB(testBox, plat)) {
+          targetBallX = plat.x - ballDiameter;
+          break;
+        }
+      }
+      football.x = targetBallX;
+      if (football.isGrounded) {
+        football.state = 'ROLLING';
+        football.applyNudge(60);
+      }
+    } else {
+      // Rotated left -> rotate ball counter-clockwise
+      football.rotation -= Math.PI * 0.75;
+      let targetBallX = this.x - ballDiameter + 2;
+
+      // Ensure ball doesn't clip into platform walls on the left
+      const testBox: Rect = { x: targetBallX, y: football.y, width: ballDiameter, height: ballDiameter };
+      for (const plat of platforms) {
+        const hasVerticalOverlap = (football.y + ballDiameter > plat.y + 4) && (football.y < plat.y + plat.height - 4);
+        if (hasVerticalOverlap && this.physics.checkAABB(testBox, plat)) {
+          targetBallX = plat.x + plat.width;
+          break;
+        }
+      }
+      football.x = targetBallX;
+      if (football.isGrounded) {
+        football.state = 'ROLLING';
+        football.applyNudge(-60);
+      }
+    }
   }
 
   public getDistanceFromFootball(football: Football): number {
@@ -506,6 +607,8 @@ export class Player {
       return; // Skip standard physics when climbing
     }
 
+    const prevFacingRight = this.facingRight;
+
     // Determine movement direction
     let moveDir = 0;
     if (input.isLeftPressed()) moveDir -= 1;
@@ -515,6 +618,11 @@ export class Player {
     if (this.state !== 'KICK') {
       if (moveDir > 0) this.facingRight = true;
       else if (moveDir < 0) this.facingRight = false;
+    }
+
+    // When the player rotates / turns while touching the ball, rotate the ball to the player's direction
+    if (this.facingRight !== prevFacingRight && this.isTouchingFootball(football)) {
+      this.rotateBallToFacingDirection(football, platforms);
     }
 
     // Cancel kick preparation if player becomes too far from ball
@@ -530,9 +638,14 @@ export class Player {
     if (this.kickStage === 'AIM') {
       this.vx = 0; // Freeze horizontal movement
 
+      const prevAimFacing = this.facingRight;
       // W, A, S, D / Arrows adjust character facing & kick direction
       if (input.isLeftPressed()) this.facingRight = false;
       else if (input.isRightPressed()) this.facingRight = true;
+
+      if (this.facingRight !== prevAimFacing && this.isTouchingFootball(football)) {
+        this.rotateBallToFacingDirection(football, platforms);
+      }
 
       this.lockedKickDir = this.getKickDirection(input);
 
@@ -710,36 +823,14 @@ export class Player {
       // Switch Animation State without continuously resetting
       if (newState !== this.state) {
         this.state = newState;
-        if (this.state === 'IDLE') {
-          this.currentSprite = this.idleSprite;
-          this.currentSprite.reset();
-        } else if (this.state === 'RUN') {
-          this.currentSprite = this.runSprite;
-          this.currentSprite.reset();
-        } else if (this.state === 'JUMP') {
-          this.currentSprite = this.jumpSprite;
-          this.currentSprite.reset();
-        }
+        this.currentSprite = this.getActiveSprite();
+        this.currentSprite.reset();
       }
 
-      // Map Jump animation frames smoothly based on vertical velocity if JUMPing
-      if (this.state === 'JUMP') {
-        const frameCount = this.jumpSprite.frameCount;
-        if (frameCount > 1) {
-          const minVy = -520;
-          const maxVy = 500;
-          const clampedVy = Math.max(minVy, Math.min(maxVy, this.vy));
-          const progress = (clampedVy - minVy) / (maxVy - minVy);
-          const targetFrame = Math.floor(progress * (frameCount - 1));
-          this.jumpSprite.setCustomFrame(targetFrame);
-        } else {
-          this.jumpSprite.clearCustomFrame();
-          this.jumpSprite.update(dt);
-        }
-      } else {
-        this.jumpSprite.clearCustomFrame();
-        this.currentSprite.update(dt);
-      }
+      // Play active sprite animation smoothly
+      const activeSprite = this.getActiveSprite();
+      activeSprite.clearCustomFrame();
+      activeSprite.update(dt);
     }
   }
 
@@ -756,11 +847,12 @@ export class Player {
     const spriteX = drawX + this.spriteOffsetX;
     const spriteY = drawY + this.spriteOffsetY;
     const flipX = !this.facingRight;
+    const activeSprite = this.getActiveSprite();
 
     if (this.state === 'CLIMB') {
       ctx.save();
       // Render climb animation sprite
-      this.climbSprite.draw(ctx, spriteX, spriteY, this.renderWidth, this.renderHeight, flipX);
+      activeSprite.draw(ctx, spriteX, spriteY, this.renderWidth, this.renderHeight, flipX);
 
       // Floating Action Text Badge Above Character
       const p = this.climbProgress;
@@ -788,10 +880,10 @@ export class Player {
       // Flash / flicker opacity during invincibility
       ctx.save();
       ctx.globalAlpha = 0.4;
-      this.currentSprite.draw(ctx, spriteX, spriteY, this.renderWidth, this.renderHeight, flipX);
+      activeSprite.draw(ctx, spriteX, spriteY, this.renderWidth, this.renderHeight, flipX);
       ctx.restore();
     } else {
-      this.currentSprite.draw(ctx, spriteX, spriteY, this.renderWidth, this.renderHeight, flipX);
+      activeSprite.draw(ctx, spriteX, spriteY, this.renderWidth, this.renderHeight, flipX);
     }
 
     // Render Floating Kick Stage Badges
@@ -922,11 +1014,8 @@ export class Player {
       return;
     }
 
-    // Check direction player is moving / pushing
-    const movingRight = this.vx > 5 || (this.vx >= 0 && this.facingRight && playerCenterX <= ballCenterX);
-    const movingLeft = this.vx < -5 || (this.vx <= 0 && !this.facingRight && playerCenterX >= ballCenterX);
-
-    if (movingRight) {
+    // Check direction player is facing / moving
+    if (this.facingRight) {
       // Ball sits in front of player's right foot
       let targetBallX = this.x + this.width - 2;
 
@@ -948,14 +1037,22 @@ export class Player {
         this.x = Math.min(this.x, football.x - this.width);
         this.vx = 0;
       } else {
+        const prevBallX = football.x;
         football.x = Math.max(football.x, targetBallX);
+        const deltaShift = football.x - prevBallX;
+        if (deltaShift > 0) {
+          football.rotation += (deltaShift / football.radius) * 1.2;
+        }
+
         const pushSpeed = isInSand ? Math.max(this.vx * 0.16, 16) : Math.max(this.vx * 1.15, 140);
-        football.applyNudge(pushSpeed);
-        if (football.isGrounded) {
+        if (this.vx > 5) {
+          football.applyNudge(pushSpeed);
+        }
+        if (football.isGrounded && Math.abs(this.vx) > 5) {
           football.state = 'ROLLING';
         }
       }
-    } else if (movingLeft) {
+    } else {
       // Ball sits in front of player's left foot
       let targetBallX = this.x - ballDiameter + 2;
 
@@ -976,24 +1073,26 @@ export class Player {
         this.x = Math.max(this.x, football.x + ballDiameter);
         this.vx = 0;
       } else {
+        const prevBallX = football.x;
         football.x = Math.min(football.x, targetBallX);
+        const deltaShift = prevBallX - football.x;
+        if (deltaShift > 0) {
+          football.rotation -= (deltaShift / football.radius) * 1.2;
+        }
+
         const pushSpeed = isInSand ? Math.min(this.vx * 0.16, -16) : Math.min(this.vx * 1.15, -140);
-        football.applyNudge(pushSpeed);
-        if (football.isGrounded) {
+        if (this.vx < -5) {
+          football.applyNudge(pushSpeed);
+        }
+        if (football.isGrounded && Math.abs(this.vx) > 5) {
           football.state = 'ROLLING';
         }
-      }
-    } else {
-      // Static overlap: separate horizontally
-      if (playerCenterX < ballCenterX) {
-        football.x = Math.max(football.x, this.x + this.width - 2);
-      } else {
-        football.x = Math.min(football.x, this.x - ballDiameter + 2);
       }
     }
   }
 
   public getDebugInfo(fps: number): PlayerDebugInfo {
+    const activeSprite = this.getActiveSprite();
     return {
       state: this.state,
       x: Math.round(this.x),
@@ -1001,8 +1100,8 @@ export class Player {
       vx: Math.round(this.vx),
       vy: Math.round(this.vy),
       isGrounded: this.isGrounded,
-      currentFrame: this.currentSprite.getCurrentFrameIndex() + 1,
-      totalFrames: this.currentSprite.frameCount,
+      currentFrame: activeSprite.getCurrentFrameIndex() + 1,
+      totalFrames: activeSprite.frameCount,
       fps: Math.round(fps),
       facingRight: this.facingRight,
       health: this.health,

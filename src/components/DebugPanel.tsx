@@ -11,6 +11,7 @@ interface DebugPanelProps {
   onResetProgress?: () => void;
   onSwitchChapter?: (chapter: number) => void;
   onWarpToTunnel?: () => void;
+  onWarpToJungleEnd?: () => void;
   onOpenStartMenu?: () => void;
 }
 
@@ -23,6 +24,7 @@ export const DebugPanel: React.FC<DebugPanelProps> = ({
   onResetProgress,
   onSwitchChapter,
   onWarpToTunnel,
+  onWarpToJungleEnd,
   onOpenStartMenu,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -210,6 +212,16 @@ export const DebugPanel: React.FC<DebugPanelProps> = ({
                 title="Teleport directly in front of the Mountain Tunnel entrance in Zone 9"
               >
                 <span>🏔️ Warp to Tunnel (Zone 9)</span>
+              </button>
+            )}
+
+            {onWarpToJungleEnd && environment?.currentLevel === 2 && (
+              <button
+                onClick={onWarpToJungleEnd}
+                className="w-full py-1 px-2 rounded bg-emerald-950/70 hover:bg-emerald-900/90 text-emerald-300 border border-emerald-700/60 flex items-center justify-center gap-1 text-[10px] transition-all font-bold"
+                title="Teleport directly to the Summit Elevator and Ancient Stone Gate"
+              >
+                <span>🏰 Warp to Summit Elevator (Zone 6)</span>
               </button>
             )}
 

@@ -1,4 +1,5 @@
 import { Platform, Rect, FootballState, BreakableWall, SandArea } from './types';
+import { SaveManager } from './SaveManager';
 
 export class Football {
   public x: number;
@@ -30,6 +31,12 @@ export class Football {
     this.y = startY;
 
     this.loadImage();
+
+    SaveManager.addSpriteChangeListener((type) => {
+      if (type === 'football') {
+        this.loadImage();
+      }
+    });
   }
 
   private loadImage() {
@@ -39,8 +46,10 @@ export class Football {
       this.retryTimeout = null;
     }
 
+    const saved = SaveManager.getSavedSprite('football');
     const base = import.meta.env.BASE_URL || '/';
-    const src = `${base.replace(/\/+$/, '')}/football.png`;
+    const defaultSrc = `${base.replace(/\/+$/, '')}/football.png`;
+    const src = saved?.dataUrl || defaultSrc;
 
     const img = new Image();
     img.crossOrigin = 'anonymous';
@@ -50,13 +59,24 @@ export class Football {
       this.retryCount = 0;
     };
     img.onerror = () => {
-      console.warn(`Failed to load football image from ${src} (attempt ${this.retryCount + 1}/${this.maxRetries})`);
-      if (this.retryCount < this.maxRetries) {
-        this.retryCount++;
-        const backoff = Math.min(1000 * Math.pow(1.5, this.retryCount), 5000);
-        this.retryTimeout = window.setTimeout(() => {
-          this.loadImage();
-        }, backoff);
+      if (saved?.dataUrl) {
+        // Fallback to default if saved sprite failed
+        const defImg = new Image();
+        defImg.crossOrigin = 'anonymous';
+        defImg.onload = () => {
+          this.image = defImg;
+          this.isLoaded = true;
+        };
+        defImg.src = defaultSrc;
+      } else {
+        console.warn(`Failed to load football image from ${src} (attempt ${this.retryCount + 1}/${this.maxRetries})`);
+        if (this.retryCount < this.maxRetries) {
+          this.retryCount++;
+          const backoff = Math.min(1000 * Math.pow(1.5, this.retryCount), 5000);
+          this.retryTimeout = window.setTimeout(() => {
+            this.loadImage();
+          }, backoff);
+        }
       }
     };
     img.src = src;
@@ -105,6 +125,10 @@ export class Football {
     } else if (nvx < 0) {
       if (this.vx > nvx) this.vx = nvx;
     }
+  }
+
+  public applyRotation(deltaRad: number) {
+    this.rotation += deltaRad;
   }
 
   public update(
@@ -364,6 +388,10 @@ export class Football {
     ctx.rotate(this.rotation);
 
     if (this.isLoaded && this.image) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+      ctx.clip();
       ctx.drawImage(
         this.image,
         -this.radius,
@@ -371,6 +399,12 @@ export class Football {
         this.radius * 2,
         this.radius * 2
       );
+      ctx.restore();
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+      ctx.stroke();
     } else {
       // Authentic vector soccer ball with 3D sphere gradient, leather seams & pentagons
       const r = this.radius;

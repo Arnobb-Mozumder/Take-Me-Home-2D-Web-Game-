@@ -5,7 +5,8 @@ import { Camera } from './Camera';
 import { Physics } from './Physics';
 import { InputManager } from './InputManager';
 import { SaveManager, SavedGameState } from './SaveManager';
-import { GameDebugInfo, FootballDebugInfo, EnvironmentDebugInfo, Checkpoint, BreakableWall, KickDirection } from './types';
+import { RatkeeperBoss } from './RatkeeperBoss';
+import { GameDebugInfo, FootballDebugInfo, EnvironmentDebugInfo, Checkpoint, BreakableWall, KickDirection, Platform } from './types';
 
 export class Game {
   public player: Player;
@@ -35,6 +36,7 @@ export class Game {
   public transitionTitle = '';
   public transitionSubtitle = '';
   public transitionSpawnAtEnd = false;
+  public transitionSpawnCheckpointId?: string;
   public chapterBannerTimer = 0;
 
   // Persistence and Auto-save System
@@ -178,7 +180,8 @@ export class Game {
     targetLevel: number,
     title: string = 'CHAPTER 2: THE JUNGLE RUSH',
     subtitle: string = 'Entering the Wild Canopy...',
-    spawnAtEnd: boolean = false
+    spawnAtEnd: boolean = false,
+    spawnCheckpointId?: string
   ) {
     if (this.gameState === 'LEVEL_TRANSITION') return;
 
@@ -189,6 +192,7 @@ export class Game {
     this.transitionTitle = title;
     this.transitionSubtitle = subtitle;
     this.transitionSpawnAtEnd = spawnAtEnd;
+    this.transitionSpawnCheckpointId = spawnCheckpointId;
     this.camera.addShake(4, 0.4);
   }
 
@@ -215,7 +219,7 @@ export class Game {
     }
   }
 
-  private triggerPlayerDeath(reason: 'water' | 'thorns' | 'cliff' | 'dog') {
+  private triggerPlayerDeath(reason: 'water' | 'thorns' | 'cliff' | 'dog' | 'boss') {
     if (this.gameState !== 'PLAYING') return;
 
     this.gameState = 'PLAYER_DIED';
@@ -226,9 +230,46 @@ export class Game {
       this.environment.triggerWaterSplash(this.player.x, this.player.y);
     } else if (reason === 'thorns') {
       this.environment.triggerThornPop(this.player.x, this.player.y);
-    } else if (reason === 'dog') {
+    } else if (reason === 'dog' || reason === 'boss') {
       this.environment.triggerImpactDust(this.player.x, this.player.y);
     }
+  }
+
+  public handleBossDefeat() {
+    this.environment.isBossDefeated = true;
+    SaveManager.setBossDefeated(true);
+    SaveManager.setStoneGateOpen(true);
+
+    if (this.environment.bossArena) {
+      this.environment.bossArena.onBossDefeated(this.player);
+      this.environment.bossArena.elevatedPlatforms = [];
+    }
+
+    if (this.environment.stoneGate) {
+      this.environment.stoneGate.unlock();
+    }
+
+    if (this.environment.ratkeeperBoss) {
+      this.environment.ratkeeperBoss.isDefeated = true;
+    }
+
+    // Open Exit Hollow Tunnel at the entrance behind the player (X: 40-200)
+    if (!this.environment.cavePortals.some(p => p.id === 'tunnel-return-to-jungle')) {
+      this.environment.cavePortals.push({
+        id: 'tunnel-return-to-jungle',
+        x: 40,
+        y: 460,
+        width: 160,
+        height: 160,
+        targetLevel: 2,
+        title: 'CHAPTER 2: JUNGLE CANOPY',
+        subtitle: 'Returning through the hollow tunnel to the catacombs...',
+        spawnCheckpointId: 'jungle-cp-ratkeeper-antechamber',
+        signText: '💀 HOLLOW TUNNEL ➔ RETURN TO CATACOMBS',
+      });
+    }
+
+    this.saveGameProgress(true, '👑 The Ratkeeper has fallen! Catacombs Unlocked.');
   }
 
   private respawnAtCheckpoint() {
@@ -242,6 +283,17 @@ export class Game {
     );
     this.environment.dogs.forEach(d => d.reset());
     this.environment.healthPotions.forEach(p => p.reset());
+    if (this.environment.bossArena && !this.environment.bossArena.isDefeated) {
+      this.environment.bossArena.reset();
+      if (this.environment.ratkeeperBoss) {
+        this.environment.ratkeeperBoss = new RatkeeperBoss(1200, 380, this.environment.bossArena);
+      }
+    }
+    if (this.environment.elevator && this.activeCheckpoint.id === 'jungle-cp-ratkeeper-antechamber') {
+      this.environment.elevator.state = 'IDLE_BOTTOM';
+      this.environment.elevator.y = this.environment.elevator.bottomFloorY;
+      this.environment.elevator.vy = 0;
+    }
     this.gameState = 'PLAYING';
     this.fadeAlpha = 0;
   }
@@ -273,8 +325,46 @@ export class Game {
       // 1. Environment & Objects Update
       this.environment.update(dt);
 
+      // Update Subterranean Elevator & Ancient Stone Gate & Boss Arena if active in level
+      let lockPlayerForElevator = false;
+      if (this.environment.elevator) {
+        const elevRes = this.environment.elevator.update(
+          dt,
+          this.player,
+          this.football,
+          this.input,
+          this.environment.dogs
+        );
+        lockPlayerForElevator = elevRes.lockPlayer;
+      }
+      if (this.environment.stoneGate) {
+        this.environment.stoneGate.update(dt, this.player, this.football);
+      }
+      if (this.environment.bossArena) {
+        if (!this.environment.bossArena.onStartEncounter) {
+          this.environment.bossArena.onStartEncounter = () => {
+            if (this.environment.ratkeeperBoss && this.environment.ratkeeperBoss.state === 'IDLE_STANCE') {
+              this.environment.ratkeeperBoss.setState('INTRO');
+            }
+          };
+        }
+        this.environment.bossArena.update(dt, this.player, this.football);
+      }
+
       // Collect platforms
       const cratePlatforms = this.environment.crates.map(c => c.toPlatform());
+      const dynamicPlatforms: Platform[] = [];
+      if (this.environment.elevator) {
+        dynamicPlatforms.push(this.environment.elevator.toPlatform());
+      }
+      if (this.environment.stoneGate) {
+        const gatePlat = this.environment.stoneGate.toPlatform();
+        if (gatePlat) dynamicPlatforms.push(gatePlat);
+      }
+      if (this.environment.bossArena) {
+        dynamicPlatforms.push(...this.environment.bossArena.toPlatforms());
+      }
+
       const wallPlatforms = this.environment.breakableWalls
         .filter(w => !w.isBroken)
         .map(w => ({
@@ -288,8 +378,37 @@ export class Game {
           topColor: '#b91c1c',
         }));
 
-      const basePlatforms = [...this.environment.platforms, ...cratePlatforms];
+      const basePlatforms = [...this.environment.platforms, ...cratePlatforms, ...dynamicPlatforms];
       const playerPlatforms = [...basePlatforms, ...wallPlatforms];
+
+      // Level 2 Spatial Partitioning: Ensure underground catacombs entities (X: 5750 to 9800, Y > 380)
+      // do not collide with surface ascent platforms or surface ground slabs situated far overhead,
+      // and surface entities do not collide with underground boss room ceiling.
+      const getActivePlatformsForEntity = (entityX: number, entityY: number, platformsList: Platform[]) => {
+        if (this.environment.currentLevel !== 2) return platformsList;
+        const isUnderground = entityY > 380 && entityX >= 5750 && entityX <= 9800;
+        if (isUnderground) {
+          // Underground: ignore surface ascent platforms and summit ground slabs situated in the sky/surface
+          return platformsList.filter(p => {
+            if (p.id.startsWith('jungle-ascent-') || p.id.startsWith('jungle-summit-')) {
+              return false;
+            }
+            return true;
+          });
+        } else {
+          // Surface: ignore subterranean arena colliders & underground platforms
+          return platformsList.filter(p => {
+            if (
+              p.id.startsWith('arena-') ||
+              p.id.startsWith('jungle-boss-') ||
+              p.id.startsWith('jungle-underground-')
+            ) {
+              return false;
+            }
+            return true;
+          });
+        }
+      };
 
       // Handle Crate Pushing by Player
       const playerBox = {
@@ -312,9 +431,10 @@ export class Game {
       });
 
       // 2. Football Physics with Breakable Wall Collision Callback
+      const activeFootballPlatforms = getActivePlatformsForEntity(this.football.x, this.football.y, basePlatforms);
       this.football.update(
         dt,
-        basePlatforms,
+        activeFootballPlatforms,
         this.environment.breakableWalls,
         (wall: BreakableWall, impactSpeed: number) => {
           if (impactSpeed >= wall.breakThreshold) {
@@ -333,23 +453,27 @@ export class Game {
       );
 
       // 3. Player Physics & Input Update
-      this.player.update(
-        dt,
-        this.input,
-        playerPlatforms,
-        this.environment.levelWidth,
-        this.football,
-        this.environment.sandAreas
-      );
+      if (!lockPlayerForElevator) {
+        const activePlayerPlatforms = getActivePlatformsForEntity(this.player.x, this.player.y, playerPlatforms);
+        this.player.update(
+          dt,
+          this.input,
+          activePlayerPlatforms,
+          this.environment.levelWidth,
+          this.football,
+          this.environment.sandAreas
+        );
+      }
 
       // 3.5 Dog Enemies Update, AI State Machine & Damage Interaction
       if (this.environment.dogs.length > 0) {
         this.environment.dogs.forEach(dog => {
+          const activeDogPlatforms = getActivePlatformsForEntity(dog.x, dog.y, playerPlatforms);
           dog.update(
             dt,
             this.player,
             this.football,
-            this.environment.platforms,
+            activeDogPlatforms,
             this.environment.breakableWalls,
             this.environment.crates,
             (defeatedDog) => {
@@ -358,6 +482,54 @@ export class Game {
                 defeatedDog.x + defeatedDog.width / 2,
                 defeatedDog.y + defeatedDog.height / 2
               );
+
+              // If Level 3 Ratkeeper Boss is defeated, permanently destroy boss, unlock elevator gate, and open return tunnel
+              if (this.environment.currentLevel === 3 || defeatedDog.isBoss) {
+                this.environment.isBossDefeated = true;
+                SaveManager.setBossDefeated(true);
+                SaveManager.setStoneGateOpen(true);
+
+                if (this.environment.bossArena) {
+                  this.environment.bossArena.onBossDefeated(this.player);
+                  this.environment.bossArena.elevatedPlatforms = [];
+                }
+
+                // Unlock elevator gate in previous scene
+                if (this.environment.stoneGate) {
+                  this.environment.stoneGate.unlock();
+                }
+
+                // Remove all floating platforms in the boss room
+                this.environment.platforms = this.environment.platforms.filter(
+                  p => !p.id.startsWith('boss-perch-') && !p.id.startsWith('boss-altar-')
+                );
+
+                // Destroy the boss forever from active enemies
+                defeatedDog.isDefeated = true;
+                this.environment.dogs = this.environment.dogs.filter(d => !d.isBoss && d !== defeatedDog);
+
+                // Open Exit Hollow Tunnel at the entrance behind the player (X: 40-200)
+                if (!this.environment.cavePortals.some(p => p.id === 'tunnel-return-to-jungle')) {
+                  this.environment.cavePortals.push({
+                    id: 'tunnel-return-to-jungle',
+                    x: 40,
+                    y: 460,
+                    width: 160,
+                    height: 160,
+                    targetLevel: 2,
+                    title: 'CHAPTER 2: JUNGLE CANOPY',
+                    subtitle: 'Returning through the hollow tunnel to the catacombs...',
+                    spawnCheckpointId: 'jungle-cp-ratkeeper-antechamber',
+                    signText: '💀 HOLLOW TUNNEL ➔ RETURN TO CATACOMBS',
+                  });
+                }
+              } else if (this.environment.currentLevel === 2) {
+                if (this.environment.dogs.filter(d => !d.isDefeated).length <= 1) {
+                  if (this.environment.stoneGate) {
+                    this.environment.stoneGate.unlock();
+                  }
+                }
+              }
             }
           );
         });
@@ -384,6 +556,31 @@ export class Game {
         // Check if player died from dog attacks
         if (this.player.health <= 0 && this.gameState === 'PLAYING') {
           this.triggerPlayerDeath('dog');
+        }
+      }
+
+      // 3.55 Level 3 Boss: Ratkeeper Boss State Machine & Attack Updates
+      if (this.environment.ratkeeperBoss && this.environment.bossArena) {
+        this.environment.ratkeeperBoss.update(
+          dt,
+          this.player,
+          this.football,
+          basePlatforms,
+          this.environment.bossArena,
+          () => {
+            this.handleBossDefeat();
+          },
+          (intensity, duration) => {
+            this.camera.addShake(intensity, duration);
+          },
+          (potion) => {
+            this.environment.healthPotions.push(potion);
+            this.environment.triggerHealBurst(potion.x + potion.width / 2, potion.y + potion.height / 2);
+          }
+        );
+
+        if (this.player.health <= 0 && this.gameState === 'PLAYING') {
+          this.triggerPlayerDeath('boss');
         }
       }
 
@@ -446,7 +643,8 @@ export class Game {
             portal.targetLevel,
             portal.title,
             portal.subtitle,
-            portal.spawnAtEnd ?? (portal.targetLevel === 1)
+            portal.spawnAtEnd ?? (portal.targetLevel === 1),
+            portal.spawnCheckpointId
           );
           break;
         }
@@ -463,25 +661,30 @@ export class Game {
       }
 
       // Water Hazards Check (Only trigger ball lost if ball is airborne/submerged, not securely resting on sand/bank)
-      for (const water of this.environment.waterZones) {
-        if (!this.football.isGrounded && this.physics.checkAABB(footBox, water)) {
-          this.triggerBallLost('water');
-          break;
-        }
-        if (this.physics.checkAABB(playerHazardBox, water)) {
-          this.triggerPlayerDeath('water');
-          break;
+      const isSubterraneanBall = this.environment.currentLevel === 2 && this.football.x >= 5780 && this.football.y >= 160;
+      const isSubterraneanPlayer = this.environment.currentLevel === 2 && this.player.x >= 5780 && this.player.y >= 160;
+
+      if (!isSubterraneanBall || !isSubterraneanPlayer) {
+        for (const water of this.environment.waterZones) {
+          if (!isSubterraneanBall && !this.football.isGrounded && this.physics.checkAABB(footBox, water)) {
+            this.triggerBallLost('water');
+            break;
+          }
+          if (!isSubterraneanPlayer && this.physics.checkAABB(playerHazardBox, water)) {
+            this.triggerPlayerDeath('water');
+            break;
+          }
         }
       }
 
       // Thorn Hazards Check
       if (this.gameState === 'PLAYING') {
         for (const thorn of this.environment.thornHazards) {
-          if (this.physics.checkAABB(footBox, thorn)) {
+          if (!isSubterraneanBall && this.physics.checkAABB(footBox, thorn)) {
             this.triggerBallLost('thorns');
             break;
           }
-          if (this.physics.checkAABB(playerHazardBox, thorn)) {
+          if (!isSubterraneanPlayer && this.physics.checkAABB(playerHazardBox, thorn)) {
             const died = this.player.takeDamage(1);
             if (died) {
               this.triggerPlayerDeath('thorns');
@@ -523,7 +726,23 @@ export class Game {
           // Swap level data
           this.environment.loadLevel(this.transitionTargetLevel);
 
-          if (this.transitionSpawnAtEnd) {
+          if (this.transitionSpawnCheckpointId) {
+            const targetCp = this.environment.checkpoints.find(c => c.id === this.transitionSpawnCheckpointId);
+            if (targetCp) {
+              this.activeCheckpoint = targetCp;
+            } else {
+              this.activeCheckpoint = this.environment.checkpoints[0];
+            }
+            this.player.reset(
+              this.activeCheckpoint.playerSpawnX,
+              this.activeCheckpoint.playerSpawnY
+            );
+            this.player.facingRight = true;
+            this.football.reset(
+              this.activeCheckpoint.ballSpawnX,
+              this.activeCheckpoint.ballSpawnY
+            );
+          } else if (this.transitionSpawnAtEnd) {
             // Find end tunnel checkpoint (e.g. cp-tunnel-exit) or the last checkpoint in the level
             const endCp =
               this.environment.checkpoints.find(c => c.id === 'cp-tunnel-exit') ||
@@ -917,23 +1136,28 @@ export class Game {
     }
 
     // Active Checkpoint HUD Indicator (Top Center)
-    this.ctx.fillStyle = 'rgba(15, 23, 42, 0.8)';
-    this.ctx.strokeStyle = '#38bdf8';
-    this.ctx.lineWidth = 1.5;
+    if (!this.environment.ratkeeperBoss || !this.environment.bossArena?.encounterStarted || this.environment.isBossDefeated) {
+      this.ctx.fillStyle = 'rgba(15, 23, 42, 0.8)';
+      this.ctx.strokeStyle = '#38bdf8';
+      this.ctx.lineWidth = 1.5;
 
-    const cpText = `🚩 CHECKPOINT: ${this.activeCheckpoint.name.toUpperCase()}`;
-    this.ctx.font = 'bold 11px sans-serif';
-    const cpWidth = this.ctx.measureText(cpText).width;
+      const cpText = `🚩 CHECKPOINT: ${this.activeCheckpoint.name.toUpperCase()}`;
+      this.ctx.font = 'bold 11px sans-serif';
+      const cpWidth = this.ctx.measureText(cpText).width;
 
-    this.ctx.beginPath();
-    this.ctx.roundRect(width / 2 - cpWidth / 2 - 12, 12, cpWidth + 24, 26, 13);
-    this.ctx.fill();
-    this.ctx.stroke();
+      this.ctx.beginPath();
+      this.ctx.roundRect(width / 2 - cpWidth / 2 - 12, 12, cpWidth + 24, 26, 13);
+      this.ctx.fill();
+      this.ctx.stroke();
 
-    this.ctx.fillStyle = '#38bdf8';
-    this.ctx.textAlign = 'center';
-    this.ctx.textBaseline = 'middle';
-    this.ctx.fillText(cpText, width / 2, 25);
+      this.ctx.fillStyle = '#38bdf8';
+      this.ctx.textAlign = 'center';
+      this.ctx.textBaseline = 'middle';
+      this.ctx.fillText(cpText, width / 2, 25);
+    } else {
+      // Render Boss Health Bar & Status HUD when fight is active
+      this.environment.ratkeeperBoss.renderHUD(this.ctx, width);
+    }
 
     // Auto-Save Toast Floating Pill (Below Checkpoint Banner)
     if (this.saveToastTimer > 0) {
@@ -1038,6 +1262,57 @@ export class Game {
     this.saveToastTimer = 2.5;
   }
 
+  public warpToLevel(levelNumber: number, options?: { checkpointId?: string; forceBossReplay?: boolean }) {
+    const forceBossReplay = options?.forceBossReplay ?? (levelNumber === 3);
+    this.environment.loadLevel(levelNumber, { forceBossReplay });
+
+    if (options?.checkpointId) {
+      const cp = this.environment.checkpoints.find(c => c.id === options.checkpointId);
+      if (cp) {
+        this.activeCheckpoint = cp;
+      } else {
+        this.activeCheckpoint = this.environment.checkpoints[0];
+      }
+    } else {
+      this.activeCheckpoint = this.environment.checkpoints[0];
+    }
+
+    // Activate all checkpoints up to this one
+    let reached = false;
+    this.environment.checkpoints.forEach(c => {
+      if (!reached) {
+        c.isActive = true;
+        if (c.id === this.activeCheckpoint.id) reached = true;
+      }
+    });
+
+    this.player.reset(
+      this.activeCheckpoint.playerSpawnX,
+      this.activeCheckpoint.playerSpawnY
+    );
+    this.player.health = this.player.maxHealth;
+    this.player.facingRight = true;
+    this.player.invincibilityTimer = 0;
+
+    this.football.reset(
+      this.activeCheckpoint.ballSpawnX,
+      this.activeCheckpoint.ballSpawnY
+    );
+
+    this.environment.dogs.forEach(d => d.reset());
+    if (this.environment.healthPotions) {
+      this.environment.healthPotions.forEach(p => p.reset());
+    }
+
+    this.camera.x = Math.max(0, this.player.x - this.camera.viewWidth * 0.26);
+    this.camera.y = Math.max(-150, this.player.y - this.camera.viewHeight * 0.68);
+    this.gameState = 'PLAYING';
+
+    const replayText = forceBossReplay && levelNumber === 3 ? ' (⚔️ Boss Fight Ready)' : '';
+    this.saveToastMessage = `Warped: ${this.environment.chapterTitle} - ${this.activeCheckpoint.name}${replayText}`;
+    this.saveToastTimer = 3.0;
+  }
+
   public loadSavedGame(): { success: boolean; message: string } {
     const saved = SaveManager.loadGameState();
     if (!saved) {
@@ -1136,7 +1411,45 @@ export class Game {
       }
     }
 
-    // 4. Narrow Space Check:
+    // 4. Ancient Stone Gate Lock Progression Check
+    if (this.environment.stoneGate && this.environment.stoneGate.state !== 'GATE_OPEN') {
+      const gate = this.environment.stoneGate;
+      const playerCenterX = this.player.x + this.player.width / 2;
+      const ballCenterX = this.football.x + this.football.radius;
+      const gateLeft = gate.x;
+      const gateRight = gate.x + gate.width;
+
+      // Check if player and ball are on opposite sides of the locked gate
+      const onOppositeSides =
+        (playerCenterX < gateLeft && ballCenterX > gateLeft) ||
+        (playerCenterX > gateRight && ballCenterX < gateRight);
+
+      // Check if ball or player is inside the gate area
+      const ballInGate = ballCenterX >= gateLeft - 10 && ballCenterX <= gateRight + 10;
+      const playerInGate = playerCenterX >= gateLeft - 10 && playerCenterX <= gateRight + 10;
+
+      if (onOppositeSides || ballInGate || playerInGate) {
+        return { allowed: false, reason: 'ANCIENT GATE IS LOCKED! 🔒' };
+      }
+    }
+
+    // 4.1 Boss Arena Lock Progression Check (Prevent teleport through locked arena gate)
+    if (this.environment.bossArena && this.environment.bossArena.isLocked) {
+      const arena = this.environment.bossArena;
+      const playerCenterX = this.player.x + this.player.width / 2;
+      const ballCenterX = this.football.x + this.football.radius;
+      const gateX = arena.gateX;
+
+      const onOppositeSides =
+        (playerCenterX < gateX && ballCenterX > gateX) ||
+        (playerCenterX > gateX && ballCenterX < gateX);
+
+      if (onOppositeSides) {
+        return { allowed: false, reason: 'ARENA IS LOCKED! 🔒' };
+      }
+    }
+
+    // 5. Narrow Space Check:
     // Direct destination is exactly where the ball is
     const targetX = this.football.x + this.football.radius - this.player.width / 2;
     const targetY = this.football.y + this.football.radius * 2 - this.player.height;
@@ -1232,10 +1545,14 @@ export class Game {
       const dy = worldY - ballCenterY;
 
       // Face in the direction of the click
+      const prevFacing = this.player.facingRight;
       if (dx >= 0) {
         this.player.facingRight = true;
       } else {
         this.player.facingRight = false;
+      }
+      if (this.player.facingRight !== prevFacing && this.player.isTouchingFootball(this.football)) {
+        this.player.rotateBallToFacingDirection(this.football, this.environment.platforms);
       }
 
       // Determine kick direction from click angle
@@ -1397,6 +1714,11 @@ export class Game {
       dog.render(this.ctx, this.camera.x, this.camera.y, this.showDebugBoxes);
     });
 
+    // 2.6 Render Ratkeeper Boss & Projectiles
+    if (this.environment.ratkeeperBoss) {
+      this.environment.ratkeeperBoss.render(this.ctx, this.camera.x, this.camera.y, this.showDebugBoxes);
+    }
+
     // 3. Render Football
     this.football.render(this.ctx, this.camera.x, this.camera.y, this.showDebugBoxes);
 
@@ -1408,6 +1730,11 @@ export class Game {
 
     // 6. Render HUD (Health & Checkpoint)
     this.renderHUD();
+
+    // 6.5 Render Boss Arena Scene Intro Banner ("The Ratkeeper")
+    if (this.environment.bossArena) {
+      this.environment.bossArena.renderSceneBanner(this.ctx, width, height);
+    }
 
     // 7. Render Overlay Banners (Ball Lost / Try Again / Fade)
     this.renderOverlayBanners();

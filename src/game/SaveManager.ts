@@ -3,15 +3,17 @@ export interface SavedSpriteConfig {
   frameCount?: number;
 }
 
-export type PlayerSpriteType = 'character' | 'idle' | 'run' | 'jump' | 'kick' | 'climb';
+export type PlayerSpriteType = 'character' | 'idle' | 'run' | 'jump' | 'kick' | 'climb' | 'football';
 export type DogSpriteType = 'dog_sleep' | 'dog_wakeup' | 'dog_alert' | 'dog_run' | 'dog_bite' | 'dog_damage' | 'dog_enemy';
+export type RatSpriteType = 'rat_idle' | 'rat_run' | 'rat_jump' | 'rat_attack' | 'rat_block' | 'rat_boss';
 export type MenuSpriteType = 'start_menue' | 'background_level1';
 
-export type SpriteType = PlayerSpriteType | DogSpriteType | MenuSpriteType;
+export type SpriteType = PlayerSpriteType | DogSpriteType | RatSpriteType | MenuSpriteType;
 
 export interface SavedSprites {
-  // Player
+  // Player & Ball
   character?: SavedSpriteConfig;
+  football?: SavedSpriteConfig;
   idle?: SavedSpriteConfig;
   run?: SavedSpriteConfig;
   jump?: SavedSpriteConfig;
@@ -25,6 +27,13 @@ export interface SavedSprites {
   dog_bite?: SavedSpriteConfig;
   dog_damage?: SavedSpriteConfig;
   dog_enemy?: SavedSpriteConfig;
+  // Rat Enemies & Boss
+  rat_idle?: SavedSpriteConfig;
+  rat_run?: SavedSpriteConfig;
+  rat_jump?: SavedSpriteConfig;
+  rat_attack?: SavedSpriteConfig;
+  rat_block?: SavedSpriteConfig;
+  rat_boss?: SavedSpriteConfig;
   // Menu & Environment
   start_menue?: SavedSpriteConfig;
   background_level1?: SavedSpriteConfig;
@@ -55,6 +64,8 @@ export interface SavedGameState {
 
 const SPRITES_STORAGE_KEY = 'FOOTBALL_SAVED_SPRITES_V1';
 const GAME_STATE_STORAGE_KEY = 'FOOTBALL_GAME_SAVE_V1';
+const BOSS_DEFEATED_STORAGE_KEY = 'FOOTBALL_BOSS_DEFEATED_V1';
+const STONE_GATE_STORAGE_KEY = 'FOOTBALL_STONE_GATE_OPEN_V1';
 
 type SpriteChangeListener = (type: SpriteType, config?: SavedSpriteConfig) => void;
 
@@ -132,11 +143,69 @@ export class SaveManager {
   }
 
   // ==========================================================
+  // PERMANENT BOSS & WORLD PROGRESSION PERSISTENCE
+  // ==========================================================
+
+  public static isBossDefeated(): boolean {
+    try {
+      const val = localStorage.getItem(BOSS_DEFEATED_STORAGE_KEY);
+      if (val === 'true') return true;
+      const gameSave = this.loadGameState();
+      return !!gameSave?.bossDefeated;
+    } catch {
+      return false;
+    }
+  }
+
+  public static setBossDefeated(defeated: boolean): void {
+    try {
+      if (defeated) {
+        localStorage.setItem(BOSS_DEFEATED_STORAGE_KEY, 'true');
+        localStorage.setItem(STONE_GATE_STORAGE_KEY, 'true');
+      } else {
+        localStorage.removeItem(BOSS_DEFEATED_STORAGE_KEY);
+      }
+    } catch (err) {
+      console.warn('Failed to save boss defeated flag:', err);
+    }
+  }
+
+  public static isStoneGateOpen(): boolean {
+    try {
+      if (this.isBossDefeated()) return true;
+      const val = localStorage.getItem(STONE_GATE_STORAGE_KEY);
+      if (val === 'true') return true;
+      const gameSave = this.loadGameState();
+      return !!gameSave?.stoneGateOpen;
+    } catch {
+      return false;
+    }
+  }
+
+  public static setStoneGateOpen(open: boolean): void {
+    try {
+      if (open) {
+        localStorage.setItem(STONE_GATE_STORAGE_KEY, 'true');
+      } else {
+        localStorage.removeItem(STONE_GATE_STORAGE_KEY);
+      }
+    } catch (err) {
+      console.warn('Failed to save stone gate state:', err);
+    }
+  }
+
+  // ==========================================================
   // GAME PROGRESS & STATE PERSISTENCE
   // ==========================================================
 
   public static saveGameState(state: SavedGameState): boolean {
     try {
+      if (state.bossDefeated) {
+        this.setBossDefeated(true);
+      }
+      if (state.stoneGateOpen) {
+        this.setStoneGateOpen(true);
+      }
       localStorage.setItem(GAME_STATE_STORAGE_KEY, JSON.stringify(state));
       return true;
     } catch (err) {
@@ -152,6 +221,10 @@ export class SaveManager {
       const parsed = JSON.parse(raw) as SavedGameState;
       // Basic sanity check
       if (parsed && typeof parsed.version === 'number' && parsed.checkpointId) {
+        if (this.isBossDefeated()) {
+          parsed.bossDefeated = true;
+          parsed.stoneGateOpen = true;
+        }
         return parsed;
       }
       return null;
@@ -164,6 +237,8 @@ export class SaveManager {
   public static clearGameState(): void {
     try {
       localStorage.removeItem(GAME_STATE_STORAGE_KEY);
+      localStorage.removeItem(BOSS_DEFEATED_STORAGE_KEY);
+      localStorage.removeItem(STONE_GATE_STORAGE_KEY);
     } catch (err) {
       console.warn('Failed to clear game state from localStorage:', err);
     }

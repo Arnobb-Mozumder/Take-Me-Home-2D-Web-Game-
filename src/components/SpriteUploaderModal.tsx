@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Player } from '../game/Player';
-import { SaveManager, SpriteType, PlayerSpriteType, DogSpriteType, MenuSpriteType } from '../game/SaveManager';
+import { SaveManager, SpriteType, PlayerSpriteType, DogSpriteType, RatSpriteType, MenuSpriteType } from '../game/SaveManager';
 import { DogEnemy } from '../game/DogEnemy';
-import { X, Upload, Layers, CheckCircle2, RotateCcw, Database, ShieldAlert, Image as ImageIcon, User } from 'lucide-react';
+import { X, Upload, Layers, CheckCircle2, RotateCcw, Database, ShieldAlert, Image as ImageIcon, User, Skull } from 'lucide-react';
 
 interface SpriteUploaderModalProps {
   isOpen: boolean;
@@ -10,7 +10,7 @@ interface SpriteUploaderModalProps {
   player: Player | null;
 }
 
-type CategoryType = 'player' | 'dog' | 'menu';
+type CategoryType = 'player' | 'dog' | 'rat' | 'menu';
 
 export const SpriteUploaderModal: React.FC<SpriteUploaderModalProps> = ({
   isOpen,
@@ -18,29 +18,39 @@ export const SpriteUploaderModal: React.FC<SpriteUploaderModalProps> = ({
   player,
 }) => {
   const [category, setCategory] = useState<CategoryType>('player');
-  const [selectedType, setSelectedType] = useState<SpriteType>('idle');
-  const [customFrameCount, setCustomFrameCount] = useState<number>(5);
+  const [selectedType, setSelectedType] = useState<SpriteType>('character');
+  const [customFrameCount, setCustomFrameCount] = useState<number>(1);
   const [saveNotification, setSaveNotification] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
   const playerSpriteTypes: { id: PlayerSpriteType; label: string; defaultFrames: number }[] = [
     { id: 'character', label: 'Character', defaultFrames: 1 },
-    { id: 'idle', label: 'Idle Stance', defaultFrames: 5 },
-    { id: 'run', label: 'Run Cycle', defaultFrames: 5 },
-    { id: 'jump', label: 'Jump / Air', defaultFrames: 5 },
+    { id: 'football', label: 'Football', defaultFrames: 1 },
+    { id: 'idle', label: 'Idle Stance', defaultFrames: 23 },
+    { id: 'run', label: 'Run Cycle', defaultFrames: 24 },
+    { id: 'jump', label: 'Jump / Air', defaultFrames: 20 },
     { id: 'kick', label: 'Kick Ball', defaultFrames: 8 },
-    { id: 'climb', label: 'Climb Wall', defaultFrames: 4 },
+    { id: 'climb', label: 'Climb Wall', defaultFrames: 8 },
   ];
 
   const dogSpriteTypes: { id: DogSpriteType; label: string; defaultFrames: number }[] = [
     { id: 'dog_sleep', label: 'Sleep', defaultFrames: 4 },
-    { id: 'dog_wakeup', label: 'Wake Up', defaultFrames: 4 },
-    { id: 'dog_alert', label: 'Alert / Bark', defaultFrames: 4 },
+    { id: 'dog_wakeup', label: 'Wake Up', defaultFrames: 10 },
+    { id: 'dog_alert', label: 'Alert / Bark', defaultFrames: 6 },
     { id: 'dog_run', label: 'Run / Chase', defaultFrames: 8 },
-    { id: 'dog_bite', label: 'Bite Attack', defaultFrames: 8 },
+    { id: 'dog_bite', label: 'Bite Attack', defaultFrames: 10 },
     { id: 'dog_damage', label: 'Hit / Damage', defaultFrames: 8 },
     { id: 'dog_enemy', label: 'Sprite Sheet', defaultFrames: 1 },
+  ];
+
+  const ratSpriteTypes: { id: RatSpriteType; label: string; defaultFrames: number }[] = [
+    { id: 'rat_idle', label: 'Rat Idle', defaultFrames: 4 },
+    { id: 'rat_run', label: 'Rat Run', defaultFrames: 8 },
+    { id: 'rat_jump', label: 'Rat Jump', defaultFrames: 6 },
+    { id: 'rat_attack', label: 'Rat Attack / Fire Nut', defaultFrames: 4 },
+    { id: 'rat_block', label: 'Rat Block', defaultFrames: 4 },
+    { id: 'rat_boss', label: 'Rat Boss Vector/Art', defaultFrames: 1 },
   ];
 
   const menuSpriteTypes: { id: MenuSpriteType; label: string; defaultFrames: number }[] = [
@@ -53,6 +63,8 @@ export const SpriteUploaderModal: React.FC<SpriteUploaderModalProps> = ({
       ? playerSpriteTypes
       : category === 'dog'
       ? dogSpriteTypes
+      : category === 'rat'
+      ? ratSpriteTypes
       : menuSpriteTypes;
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -125,6 +137,11 @@ export const SpriteUploaderModal: React.FC<SpriteUploaderModalProps> = ({
       return img?.src || null;
     }
 
+    if (category === 'rat') {
+      const img = DogEnemy.getLoadedImage(selectedType);
+      return img?.src || null;
+    }
+
     if (category === 'menu') {
       const base = import.meta.env.BASE_URL || '/';
       const cleanBase = base.replace(/\/+$/, '');
@@ -149,7 +166,7 @@ export const SpriteUploaderModal: React.FC<SpriteUploaderModalProps> = ({
               <h2 className="text-lg font-bold text-white">Sprite Sheets & Asset Manager</h2>
               <p className="text-[11px] text-emerald-400 flex items-center gap-1 font-mono">
                 <Database className="w-3 h-3 text-emerald-400" />
-                Auto-saved to Browser Storage (Persists permanently)
+                Root Folder & Browser Storage Assets
               </p>
             </div>
           </div>
@@ -162,19 +179,19 @@ export const SpriteUploaderModal: React.FC<SpriteUploaderModalProps> = ({
         </div>
 
         {/* Category Switcher Tabs */}
-        <div className="grid grid-cols-3 bg-slate-950 p-1 rounded-xl border border-slate-800 gap-1 text-xs font-bold font-mono">
+        <div className="grid grid-cols-4 bg-slate-950 p-1 rounded-xl border border-slate-800 gap-1 text-xs font-bold font-mono">
           <button
             onClick={() => {
               setCategory('player');
-              setSelectedType('idle');
-              setCustomFrameCount(5);
+              setSelectedType('character');
+              setCustomFrameCount(1);
             }}
-            className={`py-2 px-3 rounded-lg flex items-center justify-center gap-2 transition-all ${
+            className={`py-2 px-2 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
               category === 'player' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            <User className="w-4 h-4" />
-            <span>Player Sprites</span>
+            <User className="w-3.5 h-3.5" />
+            <span className="truncate">Player & Ball</span>
           </button>
 
           <button
@@ -183,12 +200,26 @@ export const SpriteUploaderModal: React.FC<SpriteUploaderModalProps> = ({
               setSelectedType('dog_run');
               setCustomFrameCount(8);
             }}
-            className={`py-2 px-3 rounded-lg flex items-center justify-center gap-2 transition-all ${
+            className={`py-2 px-2 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
               category === 'dog' ? 'bg-amber-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            <ShieldAlert className="w-4 h-4" />
-            <span>Dog Enemies</span>
+            <ShieldAlert className="w-3.5 h-3.5" />
+            <span className="truncate">Dog Enemies</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setCategory('rat');
+              setSelectedType('rat_boss');
+              setCustomFrameCount(1);
+            }}
+            className={`py-2 px-2 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
+              category === 'rat' ? 'bg-rose-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Skull className="w-3.5 h-3.5" />
+            <span className="truncate">Rat / Boss</span>
           </button>
 
           <button
@@ -197,12 +228,12 @@ export const SpriteUploaderModal: React.FC<SpriteUploaderModalProps> = ({
               setSelectedType('start_menue');
               setCustomFrameCount(1);
             }}
-            className={`py-2 px-3 rounded-lg flex items-center justify-center gap-2 transition-all ${
+            className={`py-2 px-2 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
               category === 'menu' ? 'bg-emerald-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            <ImageIcon className="w-4 h-4" />
-            <span>Menu & BG</span>
+            <ImageIcon className="w-3.5 h-3.5" />
+            <span className="truncate">Menu & BG</span>
           </button>
         </div>
 

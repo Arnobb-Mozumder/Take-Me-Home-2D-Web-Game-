@@ -12,6 +12,7 @@ interface ControlsGuideProps {
   onVirtualKickEnd?: () => void;
   onVirtualTeleport?: () => void;
   onVirtualRecall?: () => void;
+  onVirtualElevator?: () => void;
   onOpenStartMenu?: () => void;
 }
 
@@ -26,6 +27,7 @@ export const ControlsGuide: React.FC<ControlsGuideProps> = ({
   onVirtualKickEnd,
   onVirtualTeleport,
   onVirtualRecall,
+  onVirtualElevator,
   onOpenStartMenu,
 }) => {
   return (
@@ -70,6 +72,13 @@ export const ControlsGuide: React.FC<ControlsGuideProps> = ({
         <div className="hidden sm:flex items-center gap-1">
           <span className="px-1 py-0.2 bg-emerald-500/20 border border-emerald-500/50 rounded text-emerald-300 font-bold text-[10px]">C</span>
           <span className="text-emerald-200 font-semibold text-[10px]">Recall</span>
+        </div>
+
+        <div className="h-3 w-px bg-slate-700 hidden sm:block" />
+
+        <div className="hidden sm:flex items-center gap-1">
+          <span className="px-1 py-0.2 bg-sky-500/20 border border-sky-500/50 rounded text-sky-300 font-bold text-[10px]">F</span>
+          <span className="text-sky-200 font-semibold text-[10px]">Lift</span>
         </div>
       </div>
 
@@ -138,6 +147,15 @@ export const ControlsGuide: React.FC<ControlsGuideProps> = ({
         >
           <RotateCcw className="w-3 h-3 text-emerald-300" />
           <span>RECALL</span>
+        </button>
+
+        <button
+          onClick={onVirtualElevator}
+          className="h-8 px-2.5 rounded-lg bg-sky-700/90 active:bg-sky-600 border border-sky-400/70 text-white font-bold flex items-center justify-center gap-1 shadow-md active:scale-95 touch-none select-none text-[11px]"
+          aria-label="Activate Lift / Elevator"
+          title="Activate Elevator / Lift [F]"
+        >
+          <span>⚡ [F] LIFT</span>
         </button>
 
         {onOpenStartMenu && (

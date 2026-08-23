@@ -144,6 +144,16 @@ export const GameCanvas: React.FC = () => {
               gameRef.current.camera.x = 7400;
             }
           }}
+          onWarpToJungleEnd={() => {
+            if (gameRef.current) {
+              if (gameRef.current.environment.currentLevel !== 2) {
+                gameRef.current.switchLevel(2);
+              }
+              gameRef.current.player.reset(7840, 14);
+              gameRef.current.football.reset(7880, 78);
+              gameRef.current.camera.x = 7400;
+            }
+          }}
           onOpenStartMenu={() => setIsStartMenuOpen(true)}
         />
       )}
@@ -161,6 +171,7 @@ export const GameCanvas: React.FC = () => {
           onVirtualKickEnd={() => gameRef.current?.input.setVirtualKickState(false)}
           onVirtualTeleport={() => gameRef.current?.input.triggerVirtualTeleport()}
           onVirtualRecall={() => gameRef.current?.input.triggerVirtualRecall()}
+          onVirtualElevator={() => gameRef.current?.input.triggerVirtualElevator()}
           onOpenStartMenu={() => setIsStartMenuOpen(true)}
         />
       )}

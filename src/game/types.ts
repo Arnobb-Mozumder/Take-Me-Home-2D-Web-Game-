@@ -52,6 +52,7 @@ export interface CavePortal extends Rect {
   subtitle: string;
   signText: string;
   spawnAtEnd?: boolean;
+  spawnCheckpointId?: string;
 }
 
 export type PlayerState = 'IDLE' | 'RUN' | 'JUMP' | 'KICK' | 'CLIMB';

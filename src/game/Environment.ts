@@ -4,7 +4,11 @@ import { DogEnemy } from './DogEnemy';
 import { HealthPotion } from './HealthPotion';
 import { StoneGate } from './StoneGate';
 import { Elevator } from './Elevator';
+import { BossArena } from './BossArena';
+import { RatkeeperBoss } from './RatkeeperBoss';
 import { Level2Jungle, JunglePalm, JungleVine, JungleRuin, JungleFirefly } from './Level2Jungle';
+import { Level3BossRoom } from './Level3BossRoom';
+import { SaveManager } from './SaveManager';
 
 export class Environment {
   public currentLevel = 1;
@@ -26,6 +30,9 @@ export class Environment {
   public collectedPotionIds: string[] = [];
   public stoneGate: StoneGate | null = null;
   public elevator: Elevator | null = null;
+  public bossArena: BossArena | null = null;
+  public ratkeeperBoss: RatkeeperBoss | null = null;
+  public isBossDefeated: boolean = false;
 
   // Level 2 Jungle Specific Scenery
   public junglePalms: JunglePalm[] = [];
@@ -92,12 +99,15 @@ export class Environment {
     return highestSurface;
   }
 
-  public loadLevel(levelNumber: number) {
+  public loadLevel(levelNumber: number, options?: { forceBossReplay?: boolean }) {
     this.currentLevel = levelNumber;
+    this.isBossDefeated = SaveManager.isBossDefeated();
     if (levelNumber === 1) {
       this.initLevel1();
     } else if (levelNumber === 2) {
       Level2Jungle.initLevel(this);
+    } else if (levelNumber === 3) {
+      Level3BossRoom.initLevel(this, options?.forceBossReplay ?? false);
     }
     this.validateLevelReachability();
   }
@@ -125,6 +135,12 @@ export class Environment {
     this.healthPotions = [];
     this.stoneGate = null;
     this.elevator = null;
+    this.bossArena = null;
+    this.ratkeeperBoss = null;
+
+    // Sleeping Dog Enemies in Suburbia Run
+    this.dogs.push(new DogEnemy('suburbia-dog-tunnel-exit', 2750, 346, 120, false, '', 'dog'));
+    this.dogs.push(new DogEnemy('suburbia-dog-cliff-ridge', 5500, 346, 120, false, '', 'dog'));
 
     // =========================================================
     // AREA 1 — SCHOOL ROAD (TUTORIAL) (0 to 900)
@@ -908,6 +924,10 @@ export class Environment {
       Level2Jungle.renderBackground(ctx, cameraX, viewWidth, viewHeight);
       return;
     }
+    if (this.currentLevel === 3) {
+      Level3BossRoom.renderBackground(ctx, cameraX, viewWidth, viewHeight);
+      return;
+    }
 
     // LEVEL 1: Use background_level1.png image with smooth parallax wrapping
     if (this.bgLevel1Image && this.bgLevel1Image.complete && this.bgLevel1Image.naturalWidth > 0) {
@@ -1050,6 +1070,9 @@ export class Environment {
         this.jungleRuins,
         this.jungleFireflies
       );
+    } else if (this.currentLevel === 3) {
+      // Render Boss Room Scenery for Level 3
+      Level3BossRoom.renderSceneryAndProps(ctx, cameraX, cameraY, viewWidth, 768, this);
     } else {
       // 0. Level 1 Area 1 Scenery (School Gate, Road, Houses, Benches, Tutorial Sign)
       this.drawHouses(ctx, cameraX, cameraY);
@@ -1096,6 +1119,11 @@ export class Environment {
 
     // 2. Main Ground & Platforms
     this.platforms.forEach(plat => {
+      // Subterranean boss arena combat platforms are rendered exclusively inside this.bossArena with dynamic visibility
+      if (this.bossArena && (plat.id.startsWith('jungle-boss-') || plat.id.startsWith('arena-'))) {
+        return;
+      }
+
       const drawX = plat.x - cameraX;
       const drawY = plat.y - cameraY;
       if (drawX + plat.width > -50 && drawX < viewWidth + 50) {
@@ -1270,6 +1298,9 @@ export class Environment {
     }
     if (this.stoneGate) {
       this.stoneGate.render(ctx, cameraX, cameraY);
+    }
+    if (this.bossArena) {
+      this.bossArena.render(ctx, cameraX, cameraY);
     }
 
     // 8. Bushes & Rocks (Level 1 Suburbia only)

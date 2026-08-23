@@ -4,6 +4,8 @@ import { DogEnemy } from './DogEnemy';
 import { HealthPotion } from './HealthPotion';
 import { StoneGate } from './StoneGate';
 import { Elevator } from './Elevator';
+import { BossArena } from './BossArena';
+import { SaveManager } from './SaveManager';
 
 export interface JunglePalm {
   x: number;
@@ -39,6 +41,18 @@ export interface JungleFirefly {
   timer: number;
 }
 
+// Helper function to safely convert hex color string to rgba
+function hexToRgba(hex: string, alpha: number): string {
+  const cleanHex = hex.replace('#', '');
+  if (cleanHex.length === 6) {
+    const r = parseInt(cleanHex.substring(0, 2), 16);
+    const g = parseInt(cleanHex.substring(2, 4), 16);
+    const b = parseInt(cleanHex.substring(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+  return hex;
+}
+
 export class Level2Jungle {
   public static initLevel(env: {
     currentLevel: number;
@@ -59,6 +73,8 @@ export class Level2Jungle {
     collectedPotionIds?: string[];
     stoneGate: StoneGate | null;
     elevator: Elevator | null;
+    bossArena: BossArena | null;
+    isBossDefeated?: boolean;
     junglePalms: JunglePalm[];
     jungleVines: JungleVine[];
     jungleRuins: JungleRuin[];
@@ -81,8 +97,14 @@ export class Level2Jungle {
     env.cavePortals = [];
     env.dogs = [];
     env.healthPotions = [];
-    env.stoneGate = new StoneGate(8200, 110, 70, 240);
-    env.elevator = new Elevator(7920, 110, 1020);
+    env.stoneGate = new StoneGate(8180, 110, 80, 520);
+    if (SaveManager.isBossDefeated() || SaveManager.isStoneGateOpen() || env.isBossDefeated) {
+      env.stoneGate.state = 'GATE_OPEN';
+      env.stoneGate.openProgress = 1;
+    }
+    env.elevator = new Elevator(7920, 110, 620);
+    env.bossArena = null;
+    (env as { ratkeeperBoss?: unknown }).ratkeeperBoss = null;
     env.junglePalms = [];
     env.jungleVines = [];
     env.jungleRuins = [];
@@ -92,17 +114,17 @@ export class Level2Jungle {
     // SPAWN SLEEPING DOG ENEMIES (Independent AI Instances)
     // =========================================================
     // Dog 1: Overgrown Ruins Guard (Introduced AFTER breaking jungle-wall-1 at x:1560)
-    env.dogs.push(new DogEnemy('jungle-dog-ruins-1', 1740, 526));
+    env.dogs.push(new DogEnemy('jungle-dog-ruins-1', 1740, 526, 120, false, '', 'dog'));
 
     // Dog 2: River Outpost Guard
-    env.dogs.push(new DogEnemy('jungle-dog-river', 3850, 526));
+    env.dogs.push(new DogEnemy('jungle-dog-river', 3850, 526, 120, false, '', 'dog'));
 
     // Dog 3: Canopy Approach Guard
-    env.dogs.push(new DogEnemy('jungle-dog-canopy', 4520, 526));
+    env.dogs.push(new DogEnemy('jungle-dog-canopy', 4520, 526, 120, false, '', 'dog'));
 
     // Dogs 4 & 5: Summit Arena Guardians (2 Dogs Together to fight after Ascent!)
-    env.dogs.push(new DogEnemy('jungle-dog-summit-1', 7180, 66));
-    env.dogs.push(new DogEnemy('jungle-dog-summit-2', 7340, 66));
+    env.dogs.push(new DogEnemy('jungle-dog-summit-1', 7180, 66, 120, false, '', 'dog'));
+    env.dogs.push(new DogEnemy('jungle-dog-summit-2', 7340, 66, 120, false, '', 'dog'));
 
     // =========================================================
     // TUNNEL PORTAL BACK TO CHAPTER 1 (At starting cave mouth)
@@ -429,37 +451,72 @@ export class Level2Jungle {
       topColor: '#22c55e',
     });
 
-    // Bottom Hazards under Ascent Platforms (Deep Chasm)
+    // Stepping Floating Grounds between ascent platforms and cliff wall
+    const ascentStepGrounds = [
+      { id: 'jungle-step-1', x: 5530, y: 450, width: 85, height: 20 },
+      { id: 'jungle-step-2', x: 5740, y: 370, width: 85, height: 20 },
+      { id: 'jungle-step-3', x: 5950, y: 290, width: 85, height: 20 },
+      { id: 'jungle-step-4', x: 6170, y: 210, width: 85, height: 20 },
+      { id: 'jungle-step-5', x: 6390, y: 140, width: 85, height: 20 },
+      { id: 'jungle-step-6', x: 6600, y: 110, width: 85, height: 20 },
+      // Stepping platforms on the vertical cliff wall
+      { id: 'jungle-cliff-step-bot', x: 6540, y: 430, width: 110, height: 20 },
+      { id: 'jungle-cliff-step-mid', x: 6590, y: 300, width: 100, height: 20 },
+      { id: 'jungle-cliff-step-high', x: 6550, y: 190, width: 100, height: 20 },
+    ];
+    ascentStepGrounds.forEach(p => {
+      env.platforms.push({
+        ...p,
+        type: 'platform',
+        color: '#1e293b',
+        topColor: '#22c55e',
+      });
+    });
+
+    // Bottom Hazards under Ascent Platforms (Strictly under surface Ascent Zone at Y: 530, ends before subterranean cavern at 5760)
     env.thornHazards.push({
       id: 'jungle-ascent-thorns',
       x: 5300,
-      y: 700,
-      width: 1380,
-      height: 40,
+      y: 530,
+      width: 460,
+      height: 25,
       type: 'ground',
     });
 
     env.waterZones.push({
       id: 'jungle-ascent-water',
       x: 5300,
-      y: 710,
-      width: 1380,
-      height: 60,
+      y: 545,
+      width: 460,
+      height: 35,
       label: 'Chasm Rapids',
     });
 
     // =========================================================
     // ZONE 6: ANCIENT SUMMIT PLATEAU (6680 to 8200)
     // Surface Summit with 2 Dogs fighting together!
-    // At X: 7920 -> Underground Elevator
-    // At X: 8200 -> Ancient Stone Gate (blocks surface progression)
+    // At X: 7920 -> Underground Elevator Shaft (Open Vacant Chasm)
+    // At X: 8180 -> Ancient Stone Gate (blocks surface progression)
     // =========================================================
+    // Left summit ground leading up to Elevator Shaft (6680 to 7920)
     env.platforms.push({
-      id: 'jungle-summit-ground',
+      id: 'jungle-summit-ground-left',
       x: 6680,
       y: 110,
-      width: 1520, // 6680 to 8200 (Stone Gate at 8200)
-      height: 658,
+      width: 1240, // 6680 to 7920 (Left ledge of elevator shaft)
+      height: 60,
+      type: 'ground',
+      color: '#24140b',
+      topColor: '#15803d',
+    });
+
+    // Right summit ground between Elevator Shaft and Stone Gate (8050 to 8180)
+    env.platforms.push({
+      id: 'jungle-summit-ground-right',
+      x: 8050,
+      y: 110,
+      width: 130, // 8050 to 8180 (Right ledge of elevator shaft to Gate)
+      height: 60,
       type: 'ground',
       color: '#24140b',
       topColor: '#15803d',
@@ -468,10 +525,10 @@ export class Level2Jungle {
     // Surface Terrain beyond Stone Gate (Post-Boss Area)
     env.platforms.push({
       id: 'jungle-summit-beyond-gate',
-      x: 8270,
+      x: 8260,
       y: 110,
-      width: 1530,
-      height: 658,
+      width: 1540, // 8260 to 9800
+      height: 60,
       type: 'ground',
       color: '#24140b',
       topColor: '#15803d',
@@ -493,146 +550,82 @@ export class Level2Jungle {
     });
 
     // =========================================================
-    // ZONE 7: SUBTERRANEAN CATACOMBS & RATKEEPER'S LAIR (7800 to 9800, Y: 1020)
-    // Reached exclusively via the Underground Elevator at X: 7920!
+    // ZONE 7: SUBTERRANEAN CATACOMBS & HOLLOW TUNNEL (7160 to 9680, Y: 620)
+    // Reached via the Underground Elevator at X: 7920!
+    // Left Wing: Hollow Terrifying Tunnel leading to Chapter 3 (7280 to 7480)
+    // Center Hub: Elevator Landing (7620 to 8060)
+    // Right Wing: Ancient Sanctuary & Advisor Resting Hall (8060 to 9680)
     // =========================================================
 
-    // 1. Elevator Landing Shaft Floor & Enclosing Wall
+    // 1. Unified Underground Floor (extends continuously from X: 7160 to X: 9680 at Y: 620)
     env.platforms.push({
-      id: 'jungle-underground-landing',
-      x: 7840,
-      y: 1020,
-      width: 230,
+      id: 'jungle-underground-landing-floor',
+      x: 7160,
+      y: 620,
+      width: 2520, // Continuous solid floor across the basement
       height: 380,
       type: 'ground',
-      color: '#0f172a',
-      topColor: '#334155',
+      color: '#041610',
+      topColor: '#0d3829',
     });
 
+    // Underground Far Left Boundary Wall (at X: 7160)
     env.platforms.push({
-      id: 'jungle-underground-left-wall',
-      x: 7820,
-      y: 780,
-      width: 30,
-      height: 620,
+      id: 'jungle-underground-left-boundary-wall',
+      x: 7160,
+      y: 180,
+      width: 60,
+      height: 820,
       type: 'wall',
-      color: '#0f172a',
-      topColor: '#1e293b',
+      color: '#020e0a',
+      topColor: '#06261c',
     });
 
-    // 2. Narrow Claustrophobic Corridor (X: 8070 to 8400)
-    // Floor: Y=1020, Ceiling: Y=780 (height 135px -> bottom of ceiling is Y=915)
-    // Clearance: 105px, precisely calibrated for 96px player
+    // Underground Far Right Boundary Wall (Protects edge of the world at X: 9680)
     env.platforms.push({
-      id: 'jungle-underground-tunnel-floor',
-      x: 8070,
-      y: 1020,
-      width: 330,
-      height: 380,
-      type: 'ground',
-      color: '#0f172a',
-      topColor: '#334155',
+      id: 'jungle-underground-sanctuary-far-wall',
+      x: 9680,
+      y: 180,
+      width: 60,
+      height: 820,
+      type: 'wall',
+      color: '#020e0a',
+      topColor: '#06261c',
     });
 
-    env.platforms.push({
-      id: 'jungle-underground-tunnel-ceiling',
-      x: 8070,
-      y: 780,
-      width: 330,
-      height: 135,
-      type: 'ground',
-      color: '#020617',
-      topColor: '#1e293b',
-    });
-
-    // 3. Health Potion Station inside Narrow Tunnel Alcove (Non-respawning when collected)
+    // 2. Health Potion Station near Elevator Landing
     if (!env.collectedPotionIds?.includes('jungle-potion-ratkeeper-antechamber')) {
       env.healthPotions.push(
-        new HealthPotion('jungle-potion-ratkeeper-antechamber', 8230, 975, 100, 32, 42)
+        new HealthPotion('jungle-potion-ratkeeper-antechamber', 8060, 575, 100, 32, 42)
       );
     }
 
-    // 4. Boss Arena Floor & Vaulted High Cavern Ceiling (X: 8400 to 9800)
-    env.platforms.push({
-      id: 'jungle-boss-arena-floor',
-      x: 8400,
-      y: 1020,
-      width: 1400,
-      height: 380,
-      type: 'ground',
-      color: '#0f172a',
-      topColor: '#334155',
+    // 3. Hollow, Terrifying Tunnel to Chapter 3 (Ratkeeper Boss Room Scene)
+    env.cavePortals.push({
+      id: 'tunnel-to-ratkeeper-boss',
+      x: 7280,
+      y: 460,
+      width: 200,
+      height: 160,
+      targetLevel: 3,
+      title: 'CHAPTER 3: LAIR OF THE RATKEEPER',
+      subtitle: 'Descending into the Hollow Catacombs... Defeat the beast to escape!',
+      spawnCheckpointId: 'boss-cp-entrance',
+      signText: '💀 HOLLOW TUNNEL ➔ RATKEEPER',
     });
 
-    env.platforms.push({
-      id: 'jungle-boss-arena-ceiling',
-      x: 8400,
-      y: 520,
-      width: 1400,
-      height: 140,
-      type: 'ground',
-      color: '#020617',
-      topColor: '#1e293b',
-    });
-
-    // Right Boundary Wall of Boss Arena
-    env.platforms.push({
-      id: 'jungle-boss-arena-right-wall',
-      x: 9760,
-      y: 520,
-      width: 40,
-      height: 880,
-      type: 'wall',
-      color: '#0f172a',
-      topColor: '#1e293b',
-    });
-
-    // 5. Boss Arena Stepping Platforms & Elevated Rocky Altars
-    env.platforms.push({
-      id: 'jungle-boss-perch-1',
-      x: 8620,
-      y: 890,
-      width: 130,
-      height: 20,
-      type: 'platform',
-      color: '#1e293b',
-      topColor: '#475569',
-    });
-
-    env.platforms.push({
-      id: 'jungle-boss-altar',
-      x: 8950,
-      y: 770,
-      width: 190,
-      height: 24,
-      type: 'platform',
-      color: '#1e293b',
-      topColor: '#475569',
-    });
-
-    env.platforms.push({
-      id: 'jungle-boss-perch-2',
-      x: 9340,
-      y: 890,
-      width: 130,
-      height: 20,
-      type: 'platform',
-      color: '#1e293b',
-      topColor: '#475569',
-    });
-
-    // 6. Checkpoint 6: Ratkeeper's Catacombs (Boss Antechamber)
+    // 4. Checkpoint 6: Catacombs Landing (Right outside the Hollow Tunnel mouth)
     env.checkpoints.push({
       id: 'jungle-cp-ratkeeper-antechamber',
-      name: "Ratkeeper's Catacombs",
-      x: 8400,
-      y: 1020,
+      name: "Catacombs Landing",
+      x: 7520,
+      y: 620,
       width: 32,
       height: 60,
-      playerSpawnX: 8430,
-      playerSpawnY: 924, // On subterranean floor Y=1020
-      ballSpawnX: 8500,
-      ballSpawnY: 988,
+      playerSpawnX: 7520,
+      playerSpawnY: 524, // On subterranean floor Y=620 right outside tunnel
+      ballSpawnX: 7570,
+      ballSpawnY: 588,
       isActive: false,
     });
 
@@ -797,6 +790,8 @@ export class Level2Jungle {
     this.drawAscentGuideSign(ctx, cameraX, cameraY);
     this.drawSummitArenaSign(ctx, cameraX, cameraY);
     this.drawSubterraneanAtmosphere(ctx, cameraX, cameraY);
+    this.drawTerrifyingBossTunnel(ctx, cameraX, cameraY);
+    this.drawJungleGoalShrine(ctx, cameraX, cameraY);
 
     // 3. Ancient Monoliths & Totem Ruins
     jungleRuins.forEach(ruin => {
@@ -1125,132 +1120,378 @@ export class Level2Jungle {
   private static drawSubterraneanAtmosphere(ctx: CanvasRenderingContext2D, cameraX: number, cameraY: number) {
     const now = performance.now();
 
-    // 1. Subterranean Narrow Tunnel Torches & Crystals (X: 8070 to 8400, Y: 780 to 1020)
-    for (let tx = 8120; tx <= 8360; tx += 80) {
-      const drawX = tx - cameraX;
-      const torchY = 860 - cameraY;
-      if (drawX > -50 && drawX < 1365 + 50) {
+    // 1. Ancient Stone Pillars in the Subterranean Hall & Right Sanctuary (X: 8150, 8450, 8750, 9050, 9350)
+    const pillarPositions = [8150, 8450, 8750, 9050, 9350];
+    pillarPositions.forEach(px => {
+      const drawX = px - cameraX;
+      const groundY = 620 - cameraY;
+      const ceilY = 240 - cameraY;
+      const pillarW = 44;
+
+      if (drawX + pillarW > -50 && drawX < 1365 + 50) {
         ctx.save();
-        // Torch Sconce
-        ctx.fillStyle = '#64748b';
-        ctx.fillRect(drawX - 3, torchY, 6, 18);
-        ctx.fillStyle = '#334155';
-        ctx.fillRect(drawX - 6, torchY + 4, 12, 5);
+        // Pillar Shaft
+        const pGrad = ctx.createLinearGradient(drawX, 0, drawX + pillarW, 0);
+        pGrad.addColorStop(0, '#062017');
+        pGrad.addColorStop(0.5, '#0b3829');
+        pGrad.addColorStop(1, '#041610');
+        ctx.fillStyle = pGrad;
+        ctx.fillRect(drawX, ceilY, pillarW, groundY - ceilY);
 
-        // Torch Flame Flicker
-        const flicker = Math.sin(now * 0.01 + tx) * 2;
-        ctx.fillStyle = '#f97316';
-        ctx.beginPath();
-        ctx.ellipse(drawX, torchY - 6 + flicker * 0.5, 5 + flicker * 0.5, 9 + flicker, 0, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.strokeStyle = '#0f4d38';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(drawX, ceilY, pillarW, groundY - ceilY);
 
-        ctx.fillStyle = '#fef08a';
-        ctx.beginPath();
-        ctx.ellipse(drawX, torchY - 4 + flicker * 0.3, 2.5, 5, 0, 0, Math.PI * 2);
-        ctx.fill();
+        // Capital and Base
+        ctx.fillStyle = '#062017';
+        ctx.fillRect(drawX - 8, ceilY, pillarW + 16, 20);
+        ctx.fillRect(drawX - 8, groundY - 24, pillarW + 16, 24);
+        ctx.strokeRect(drawX - 8, ceilY, pillarW + 16, 20);
+        ctx.strokeRect(drawX - 8, groundY - 24, pillarW + 16, 24);
 
-        // Warm radial light
-        const glow = ctx.createRadialGradient(drawX, torchY - 6, 2, drawX, torchY - 6, 48);
-        glow.addColorStop(0, 'rgba(249, 115, 22, 0.25)');
-        glow.addColorStop(1, 'rgba(249, 115, 22, 0)');
-        ctx.fillStyle = glow;
-        ctx.beginPath();
-        ctx.arc(drawX, torchY - 6, 48, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.restore();
-      }
-    }
-
-    // 2. Boss Arena Archway Banner & Glowing Crystals (X: 8400 to 9800)
-    const arenaBannerX = 8480 - cameraX;
-    const arenaBannerY = 660 - cameraY;
-    if (arenaBannerX > -300 && arenaBannerX < 1365 + 300) {
-      ctx.save();
-
-      // Stone Plaque Arch Header
-      ctx.fillStyle = '#090d16';
-      ctx.fillRect(arenaBannerX - 60, arenaBannerY - 26, 280, 48);
-      ctx.strokeStyle = '#6366f1';
-      ctx.lineWidth = 2.5;
-      ctx.strokeRect(arenaBannerX - 60, arenaBannerY - 26, 280, 48);
-
-      // Glowing Runes Title
-      ctx.fillStyle = '#a5b4fc';
-      ctx.font = 'bold 12px system-ui, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('⚔️ THE RATKEEPER\'S CATACOMBS ⚔️', arenaBannerX + 80, arenaBannerY);
-
-      ctx.fillStyle = '#cbd5e1';
-      ctx.font = '9px monospace';
-      ctx.fillText('ANCIENT SUBTERRANEAN AMPHITHEATER', arenaBannerX + 80, arenaBannerY + 14);
-
-      ctx.restore();
-    }
-
-    // 3. Bioluminescent Crystal Formations along Boss Arena Floor & Altar
-    const crystalSpots = [
-      { x: 8460, y: 1020, color: '#c084fc', size: 16 },
-      { x: 8780, y: 1020, color: '#38bdf8', size: 20 },
-      { x: 8990, y: 770, color: '#a855f7', size: 24 }, // On top altar
-      { x: 9180, y: 1020, color: '#38bdf8', size: 18 },
-      { x: 9550, y: 1020, color: '#c084fc', size: 22 },
-      { x: 9700, y: 1020, color: '#f43f5e', size: 16 },
-    ];
-
-    crystalSpots.forEach(c => {
-      const cx = c.x - cameraX;
-      const cy = c.y - cameraY;
-      if (cx > -50 && cx < 1365 + 50) {
-        ctx.save();
-        const pulse = Math.sin(now * 0.003 + c.x) * 0.2 + 0.8;
-
-        // Radial Glow
-        const rad = ctx.createRadialGradient(cx, cy - c.size * 0.5, 2, cx, cy - c.size * 0.5, c.size * 2);
-        rad.addColorStop(0, c.color.replace(')', ', 0.35)').replace('rgb', 'rgba').replace('#', 'rgba('));
-        rad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-
-        // Crystal Spikes
-        ctx.fillStyle = c.color;
-        ctx.globalAlpha = pulse;
-        ctx.beginPath();
-        ctx.moveTo(cx - c.size * 0.4, cy);
-        ctx.lineTo(cx, cy - c.size);
-        ctx.lineTo(cx + c.size * 0.4, cy);
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.beginPath();
-        ctx.moveTo(cx - c.size * 0.6, cy);
-        ctx.lineTo(cx - c.size * 0.2, cy - c.size * 0.7);
-        ctx.lineTo(cx, cy);
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.beginPath();
-        ctx.moveTo(cx, cy);
-        ctx.lineTo(cx + c.size * 0.3, cy - c.size * 0.75);
-        ctx.lineTo(cx + c.size * 0.7, cy);
-        ctx.closePath();
-        ctx.fill();
+        // Carved glowing rune
+        const runeGlow = 0.5 + 0.5 * Math.sin(now * 0.002 + px);
+        ctx.fillStyle = `rgba(52, 211, 153, ${0.45 * runeGlow})`;
+        ctx.font = 'bold 12px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('ᛟ', drawX + pillarW / 2, groundY - 70);
 
         ctx.restore();
       }
     });
 
-    // 4. Dripping Water Droplets from Underground Ceiling (Y: 520 to 1020)
-    for (let dropX = 8550; dropX <= 9650; dropX += 180) {
-      const dx = dropX - cameraX;
-      if (dx > -20 && dx < 1365 + 20) {
-        const cycle = ((now * 0.25 + dropX * 3) % 1500) / 1500;
-        const dy = 520 + cycle * 500 - cameraY;
-        if (dy < 1020 - cameraY) {
-          ctx.fillStyle = 'rgba(147, 197, 253, 0.65)';
-          ctx.beginPath();
-          ctx.arc(dx, dy, 2, 0, Math.PI * 2);
-          ctx.fill();
-        }
+    // 2. Warm Amber Lantern Sconces along the Hall (X: 7980, 8250, 8550, 8850, 9150, 9450)
+    const torchXs = [7980, 8250, 8550, 8850, 9150, 9450];
+    for (const tx of torchXs) {
+      const drawX = tx - cameraX;
+      const torchY = 520 - cameraY;
+      if (drawX > -50 && drawX < 1365 + 50) {
+        ctx.save();
+        // Iron Sconce Bracket
+        ctx.fillStyle = '#475569';
+        ctx.fillRect(drawX - 3, torchY, 6, 20);
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(drawX - 8, torchY + 6, 16, 6);
+
+        // Torch Flame Flicker
+        const flicker = Math.sin(now * 0.012 + tx) * 2;
+        ctx.fillStyle = '#f97316';
+        ctx.beginPath();
+        ctx.ellipse(drawX, torchY - 6 + flicker * 0.5, 6 + flicker * 0.4, 10 + flicker, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#fef08a';
+        ctx.beginPath();
+        ctx.ellipse(drawX, torchY - 4 + flicker * 0.2, 3, 5, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Warm radial light
+        const glow = ctx.createRadialGradient(drawX, torchY - 6, 2, drawX, torchY - 6, 60);
+        glow.addColorStop(0, 'rgba(249, 115, 22, 0.30)');
+        glow.addColorStop(1, 'rgba(249, 115, 22, 0)');
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(drawX, torchY - 6, 60, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
       }
+    }
+
+    // 3. Ancient Stone Altar & Dais for Advisor Character (X: 8900 to 9020)
+    const daisX = 8900 - cameraX;
+    const daisGroundY = 620 - cameraY;
+    if (daisX > -200 && daisX < 1365 + 200) {
+      ctx.save();
+      // Tiered Stone Platform
+      ctx.fillStyle = '#062017';
+      ctx.fillRect(daisX - 20, daisGroundY - 14, 160, 14);
+      ctx.strokeStyle = '#10b981';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(daisX - 20, daisGroundY - 14, 160, 14);
+
+      ctx.fillStyle = '#0a2e22';
+      ctx.fillRect(daisX, daisGroundY - 26, 120, 12);
+      ctx.strokeRect(daisX, daisGroundY - 26, 120, 12);
+
+      // Resting Cushion / Ancient Stone Throne
+      ctx.fillStyle = '#064e3b';
+      ctx.fillRect(daisX + 30, daisGroundY - 50, 60, 24);
+      ctx.strokeStyle = '#34d399';
+      ctx.strokeRect(daisX + 30, daisGroundY - 50, 60, 24);
+
+      // Sanctuary Guidance Tablet
+      ctx.fillStyle = '#022c22';
+      ctx.fillRect(daisX + 180, daisGroundY - 80, 160, 48);
+      ctx.strokeStyle = '#34d399';
+      ctx.lineWidth = 1.8;
+      ctx.strokeRect(daisX + 180, daisGroundY - 80, 160, 48);
+
+      ctx.fillStyle = '#a7f3d0';
+      ctx.font = 'bold 9px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('🏛️ SANCTUARY OF ELDERS', daisX + 260, daisGroundY - 62);
+      ctx.fillStyle = '#6ee7b7';
+      ctx.font = 'bold 8px monospace';
+      ctx.fillText('SAFE GROUND • ADVISOR CHAMBER', daisX + 260, daisGroundY - 46);
+
+      ctx.restore();
+    }
+  }
+
+  // =============================================================
+  // HOLLOW TERRIFYING TUNNEL ENTRANCE (X: 7280, Y: 620)
+  // Leads to Chapter 3: Ratkeeper Boss Room
+  // =============================================================
+  private static drawTerrifyingBossTunnel(ctx: CanvasRenderingContext2D, cameraX: number, cameraY: number) {
+    const tunnelX = 7280 - cameraX;
+    const groundY = 620 - cameraY;
+    const tunnelW = 200;
+    const tunnelH = 160;
+    const now = performance.now();
+
+    if (tunnelX + tunnelW < -100 || tunnelX > 1365 + 100) return;
+
+    ctx.save();
+
+    // 1. Massive Jagged Obsidian Cave Mouth Silhouette
+    ctx.fillStyle = '#020b08';
+    ctx.beginPath();
+    ctx.moveTo(tunnelX - 30, groundY);
+    ctx.lineTo(tunnelX - 20, groundY - tunnelH - 40);
+    ctx.lineTo(tunnelX + tunnelW / 2, groundY - tunnelH - 60);
+    ctx.lineTo(tunnelX + tunnelW + 20, groundY - tunnelH - 40);
+    ctx.lineTo(tunnelX + tunnelW + 30, groundY);
+    ctx.closePath();
+    ctx.fill();
+
+    // 2. Ominous Void Darkness & Swirling Crimson-Purple Fog Interior
+    const voidGrad = ctx.createLinearGradient(tunnelX, 0, tunnelX + tunnelW, 0);
+    voidGrad.addColorStop(0, '#020617');
+    voidGrad.addColorStop(0.25, '#1e1b4b');
+    voidGrad.addColorStop(0.5, '#450a0a');
+    voidGrad.addColorStop(0.75, '#1e1b4b');
+    voidGrad.addColorStop(1, '#020617');
+
+    ctx.fillStyle = voidGrad;
+    ctx.beginPath();
+    ctx.moveTo(tunnelX, groundY);
+    ctx.lineTo(tunnelX + 10, groundY - tunnelH + 20);
+    ctx.quadraticCurveTo(tunnelX + tunnelW / 2, groundY - tunnelH - 30, tunnelX + tunnelW - 10, groundY - tunnelH + 20);
+    ctx.lineTo(tunnelX + tunnelW, groundY);
+    ctx.closePath();
+    ctx.fill();
+
+    // Swirling Dark Smoke / Mist Particles inside tunnel mouth
+    const pulse = 0.5 + 0.5 * Math.sin(now * 0.003);
+    ctx.fillStyle = `rgba(239, 68, 68, ${0.15 * pulse})`;
+    ctx.beginPath();
+    ctx.ellipse(tunnelX + tunnelW / 2, groundY - tunnelH * 0.4, tunnelW * 0.4, tunnelH * 0.35, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Sinister Glowing Red Beast Eyes in the Tunnel Depths
+    const eyeBlink = Math.sin(now * 0.002) > 0.95 ? 0 : 1;
+    if (eyeBlink) {
+      const eyeGlow = 0.7 + 0.3 * Math.sin(now * 0.006);
+      ctx.shadowColor = '#ef4444';
+      ctx.shadowBlur = 10;
+      ctx.fillStyle = `rgba(239, 68, 68, ${eyeGlow})`;
+
+      // Left Eye Pair
+      ctx.beginPath();
+      ctx.arc(tunnelX + tunnelW / 2 - 25, groundY - 70, 3.5, 0, Math.PI * 2);
+      ctx.arc(tunnelX + tunnelW / 2 - 15, groundY - 70, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Right Shadow Eye Pair
+      ctx.beginPath();
+      ctx.arc(tunnelX + tunnelW / 2 + 18, groundY - 55, 3, 0, Math.PI * 2);
+      ctx.arc(tunnelX + tunnelW / 2 + 28, groundY - 55, 3, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.shadowBlur = 0;
+    }
+
+    // 3. Jagged Rocky Stalactites (Teeth-like Archway)
+    ctx.fillStyle = '#062018';
+    ctx.strokeStyle = '#020e0a';
+    ctx.lineWidth = 2;
+
+    const teethCount = 7;
+    const toothStep = tunnelW / teethCount;
+    for (let i = 0; i < teethCount; i++) {
+      const tx = tunnelX + i * toothStep;
+      const tLen = 25 + Math.sin(i * 1.8) * 16;
+      ctx.beginPath();
+      ctx.moveTo(tx, groundY - tunnelH + 15);
+      ctx.lineTo(tx + toothStep / 2, groundY - tunnelH + 15 + tLen);
+      ctx.lineTo(tx + toothStep, groundY - tunnelH + 15);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // Heavy Stone Arch Border
+    ctx.strokeStyle = '#0f382c';
+    ctx.lineWidth = 12;
+    ctx.beginPath();
+    ctx.moveTo(tunnelX - 4, groundY);
+    ctx.lineTo(tunnelX + 10, groundY - tunnelH + 20);
+    ctx.quadraticCurveTo(tunnelX + tunnelW / 2, groundY - tunnelH - 30, tunnelX + tunnelW - 10, groundY - tunnelH + 20);
+    ctx.lineTo(tunnelX + tunnelW + 4, groundY);
+    ctx.stroke();
+
+    // 4. Skull Totems on Spikes on Left and Right of Tunnel Mouth
+    [tunnelX - 22, tunnelX + tunnelW + 14].forEach(sx => {
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(sx, groundY - 110, 8, 110);
+
+      // Skull Totem
+      ctx.fillStyle = '#f1f5f9';
+      ctx.beginPath();
+      ctx.arc(sx + 4, groundY - 118, 12, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Skull Jaw
+      ctx.fillRect(sx - 1, groundY - 112, 10, 8);
+
+      // Skull Eye Sockets
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.arc(sx + 1, groundY - 120, 3, 0, Math.PI * 2);
+      ctx.arc(sx + 7, groundY - 120, 3, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Glowing Green Eerie Candle Flame atop Skull
+      const flameFlicker = Math.sin(now * 0.01 + sx) * 2;
+      ctx.fillStyle = '#22c55e';
+      ctx.beginPath();
+      ctx.ellipse(sx + 4, groundY - 134 + flameFlicker * 0.5, 4, 7 + flameFlicker, 0, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    // 5. Ominous Warning Signboard Overhead
+    ctx.fillStyle = '#020b08';
+    ctx.fillRect(tunnelX - 20, groundY - tunnelH - 95, tunnelW + 40, 48);
+    ctx.strokeStyle = '#ef4444';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(tunnelX - 20, groundY - tunnelH - 95, tunnelW + 40, 48);
+
+    ctx.fillStyle = '#fca5a5';
+    ctx.font = 'bold 12px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('💀 HOLLOW TUNNEL 💀', tunnelX + tunnelW / 2, groundY - tunnelH - 74);
+
+    ctx.fillStyle = '#f87171';
+    ctx.font = 'bold 9px monospace';
+    ctx.fillText('LAIR OF THE RATKEEPER • POINT OF NO RETURN', tunnelX + tunnelW / 2, groundY - tunnelH - 58);
+
+    ctx.restore();
+  }
+
+  // =============================================================
+  // JUNGLE SUMMIT SANCTUARY & VICTORY SHRINE (X: 9400 to 9750, Y: 110)
+  // =============================================================
+  private static drawJungleGoalShrine(ctx: CanvasRenderingContext2D, cameraX: number, cameraY: number) {
+    const goalX = 9420 - cameraX;
+    const groundY = 110 - cameraY;
+    const now = performance.now();
+
+    if (goalX > -300 && goalX < 1365 + 300) {
+      ctx.save();
+
+      // 1. Ancient Gold & Emerald Goal Posts
+      ctx.strokeStyle = '#facc15';
+      ctx.lineWidth = 7;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      // Left post, Crossbar, Back supports
+      ctx.beginPath();
+      ctx.moveTo(goalX, groundY);
+      ctx.lineTo(goalX, groundY - 130);
+      ctx.lineTo(goalX + 130, groundY - 130);
+      ctx.lineTo(goalX + 130, groundY);
+      ctx.stroke();
+
+      // Golden Net Depth Frame
+      ctx.strokeStyle = '#ca8a04';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(goalX, groundY - 130);
+      ctx.lineTo(goalX + 45, groundY - 110);
+      ctx.lineTo(goalX + 175, groundY - 110);
+      ctx.lineTo(goalX + 130, groundY - 130);
+      ctx.stroke();
+
+      // Golden Mesh Netting
+      ctx.strokeStyle = 'rgba(254, 240, 138, 0.45)';
+      ctx.lineWidth = 1.2;
+      for (let nx = goalX; nx <= goalX + 130; nx += 14) {
+        ctx.beginPath();
+        ctx.moveTo(nx, groundY - 130);
+        ctx.lineTo(nx + 25, groundY);
+        ctx.stroke();
+      }
+      for (let ny = groundY - 130; ny <= groundY; ny += 16) {
+        ctx.beginPath();
+        ctx.moveTo(goalX, ny);
+        ctx.lineTo(goalX + 130, ny);
+        ctx.stroke();
+      }
+
+      // 2. Glowing Golden Championship Trophy on Altar
+      const trophyX = goalX + 65;
+      const trophyY = groundY - 45;
+      const pulse = Math.sin(now * 0.004) * 0.2 + 0.8;
+
+      // Altar Base
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(trophyX - 22, groundY - 16, 44, 16);
+      ctx.strokeStyle = '#22c55e';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(trophyX - 22, groundY - 16, 44, 16);
+
+      // Trophy Cup
+      ctx.fillStyle = '#fbbf24';
+      ctx.beginPath();
+      ctx.moveTo(trophyX - 16, trophyY - 20);
+      ctx.lineTo(trophyX + 16, trophyY - 20);
+      ctx.lineTo(trophyX + 10, trophyY);
+      ctx.lineTo(trophyX - 10, trophyY);
+      ctx.closePath();
+      ctx.fill();
+
+      // Trophy Base Stem
+      ctx.fillRect(trophyX - 4, trophyY, 8, 14);
+      ctx.fillRect(trophyX - 12, trophyY + 14, 24, 6);
+
+      // Golden Trophy Glow Halo
+      const trophyGlow = ctx.createRadialGradient(trophyX, trophyY - 10, 4, trophyX, trophyY - 10, 50);
+      trophyGlow.addColorStop(0, `rgba(250, 204, 21, ${0.45 * pulse})`);
+      trophyGlow.addColorStop(1, 'rgba(250, 204, 21, 0)');
+      ctx.fillStyle = trophyGlow;
+      ctx.beginPath();
+      ctx.arc(trophyX, trophyY - 10, 50, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 3. Floating Grand Victory Shrine Header
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(goalX - 55, groundY - 195, 240, 50);
+      ctx.strokeStyle = '#facc15';
+      ctx.lineWidth = 2.5;
+      ctx.strokeRect(goalX - 55, groundY - 195, 240, 50);
+
+      ctx.fillStyle = '#fef08a';
+      ctx.font = 'bold 12px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('🏆 JUNGLE SUMMIT SANCTUARY 🏆', goalX + 65, groundY - 174);
+
+      ctx.fillStyle = '#4ade80';
+      ctx.font = 'bold 10px monospace';
+      ctx.fillText('CHAPTER 2 COMPLETE! ⚽✨', goalX + 65, groundY - 156);
+
+      ctx.restore();
     }
   }
 }

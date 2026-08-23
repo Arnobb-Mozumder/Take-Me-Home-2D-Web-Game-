@@ -6,6 +6,7 @@ export class InputManager {
   private teleportRequested = false;
   private recallRequested = false;
   private interactRequested = false;
+  private elevatorRequested = false;
   private virtualLeft = false;
   private virtualRight = false;
   private virtualJump = false;
@@ -38,8 +39,11 @@ export class InputManager {
       if (e.code === 'ShiftLeft') {
         this.jumpRequested = true;
       }
-      if (e.code === 'KeyK' || e.code === 'KeyF' || e.code === 'KeyE' || e.code === 'Space' || e.code === 'Enter') {
+      if (e.code === 'KeyK' || e.code === 'KeyE' || e.code === 'Space' || e.code === 'Enter') {
         this.kickRequested = true;
+      }
+      if (e.code === 'KeyF') {
+        this.elevatorRequested = true;
       }
       if (e.code === 'KeyE' || e.code === 'Enter') {
         this.interactRequested = true;
@@ -183,6 +187,20 @@ export class InputManager {
   public consumeInteractRequest(): boolean {
     if (this.interactRequested) {
       this.interactRequested = false;
+      return true;
+    }
+    return false;
+  }
+
+  public triggerVirtualElevator() {
+    this.elevatorRequested = true;
+    this.interactRequested = true;
+  }
+
+  // Consume an elevator (F / E / Enter key) press request
+  public consumeElevatorRequest(): boolean {
+    if (this.elevatorRequested) {
+      this.elevatorRequested = false;
       return true;
     }
     return false;
