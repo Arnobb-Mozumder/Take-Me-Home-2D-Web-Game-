@@ -1,0 +1,8 @@
+{
+  "name": "Football Hero Platformer",
+  "description": "A dynamic 2D precision football platformer featuring the multi-phase Ratkeeper boss encounter with high-jump meteor attacks, 3-second dizzy cooldown vulnerability window, and proximity evasion.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
