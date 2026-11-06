@@ -121,6 +121,7 @@ const KNOWN_FRAMES: Record<string, FrameRect[]> = {
     { x: 850, y: 519, width: 628, height: 446 },
   ],
   'rat_run.png': [
+<<<<<<< HEAD
     { x: 18, y: 140, width: 373, height: 304 },
     { x: 390, y: 140, width: 406, height: 304 },
     { x: 795, y: 140, width: 366, height: 305 },
@@ -145,6 +146,30 @@ const KNOWN_FRAMES: Record<string, FrameRect[]> = {
     { x: 812, y: 18, width: 654, height: 494 },
     { x: 0, y: 512, width: 765, height: 470 },
     { x: 810, y: 512, width: 686, height: 464 },
+=======
+    { x: 16, y: 162, width: 409, height: 284 },
+    { x: 392, y: 171, width: 423, height: 275 },
+    { x: 799, y: 190, width: 383, height: 257 },
+    { x: 1164, y: 186, width: 361, height: 263 },
+  ],
+  'rat_jump.png': [
+    { x: 32, y: 184, width: 453, height: 264 },
+    { x: 513, y: 131, width: 514, height: 303 },
+    { x: 1059, y: 30, width: 455, height: 386 },
+    { x: 487, y: 630, width: 505, height: 295 },
+  ],
+  'rat_attack.png': [
+    { x: 109, y: 9, width: 633, height: 454 },
+    { x: 809, y: 48, width: 823, height: 405 },
+    { x: 35, y: 441, width: 824, height: 490 },
+    { x: 964, y: 495, width: 674, height: 422 },
+  ],
+  'rat_block.png': [
+    { x: 91, y: 58, width: 618, height: 413 },
+    { x: 857, y: 16, width: 611, height: 464 },
+    { x: 0, y: 463, width: 767, height: 511 },
+    { x: 868, y: 496, width: 628, height: 480 },
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
   ],
   'rat_boss.png': [{ x: 67, y: 75, width: 1273, height: 972 }],
 };
@@ -550,6 +575,7 @@ export class SpriteSheet {
     return this.currentFrame;
   }
 
+<<<<<<< HEAD
   public getCurrentFrameRect(): FrameRect | null {
     const idx = this.getCurrentFrameIndex();
     return this.frames[idx] || null;
@@ -619,6 +645,8 @@ export class SpriteSheet {
     ctx.restore();
   }
 
+=======
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
   public draw(
     ctx: CanvasRenderingContext2D,
     dx: number,

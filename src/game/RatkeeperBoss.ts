@@ -166,29 +166,48 @@ export class RatkeeperBoss implements Rect {
     this.runSprite = new SpriteSheet({
       url: getAssetPath('rat_run.png'),
       frameCount: 4,
+<<<<<<< HEAD
       frameDuration: 0.14,
+=======
+      frameDuration: 0.1,
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
       loop: true,
     });
 
     this.jumpSprite = new SpriteSheet({
       url: getAssetPath('rat_jump.png'),
+<<<<<<< HEAD
       frameCount: 6,
       frameDuration: 0.12,
       loop: true,
+=======
+      frameCount: 4,
+      frameDuration: 0.12,
+      loop: false,
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
     });
 
     this.attackSprite = new SpriteSheet({
       url: getAssetPath('rat_attack.png'),
       frameCount: 4,
+<<<<<<< HEAD
       frameDuration: 0.26, // Slower, readable, powerful attack animation
+=======
+      frameDuration: 0.12,
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
       loop: true,
     });
 
     this.blockSprite = new SpriteSheet({
       url: getAssetPath('rat_block.png'),
       frameCount: 4,
+<<<<<<< HEAD
       frameDuration: 0.16, // Clean defensive blocking posture
       loop: true,
+=======
+      frameDuration: 0.1,
+      loop: false,
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
     });
 
     this.currentSprite = this.idleSprite;
@@ -197,7 +216,11 @@ export class RatkeeperBoss implements Rect {
     SaveManager.addSpriteChangeListener((type) => {
       if (type === 'rat_idle') this.idleSprite.load(getAssetPath('rat_idle.png'), 4);
       if (type === 'rat_run') this.runSprite.load(getAssetPath('rat_run.png'), 4);
+<<<<<<< HEAD
       if (type === 'rat_jump') this.jumpSprite.load(getAssetPath('rat_jump.png'), 6);
+=======
+      if (type === 'rat_jump') this.jumpSprite.load(getAssetPath('rat_jump.png'), 4);
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
       if (type === 'rat_attack') this.attackSprite.load(getAssetPath('rat_attack.png'), 4);
       if (type === 'rat_block') this.blockSprite.load(getAssetPath('rat_block.png'), 4);
     });
@@ -241,8 +264,11 @@ export class RatkeeperBoss implements Rect {
       this.airShotsSpawned = 0;
       this.vx = 0;
       this.vy = RATKEEPER_CONFIG.JUMP_VELOCITY;
+<<<<<<< HEAD
       this.currentSprite = this.jumpSprite;
       this.jumpSprite.reset();
+=======
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
       this.playSound('boss_roar');
       this.addFloatingText('🔥 HIGH JUMP METEOR ATTACK!', this.x + this.width / 2, this.y - 20, '#ef4444', '#7f1d1d');
     } else if (newState === 'COOLDOWN_IDLE') {
@@ -258,8 +284,11 @@ export class RatkeeperBoss implements Rect {
       this.slamSubState = 'ASCEND';
       this.vx = 0;
       this.vy = -860;
+<<<<<<< HEAD
       this.currentSprite = this.jumpSprite;
       this.jumpSprite.reset();
+=======
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
       this.playSound('boss_roar');
       this.addFloatingText('⚡ FINAL SLAM ASSAULT!', this.x + this.width / 2, this.y - 20, '#f59e0b', '#78350f');
     } else if (newState === 'EXHAUSTION') {
@@ -269,14 +298,20 @@ export class RatkeeperBoss implements Rect {
       this.addFloatingText('💨 EXHAUSTED OPENING!', this.x + this.width / 2, this.y - 20, '#38bdf8', '#0284c7');
     } else if (newState === 'RAPID_HOLE_FIRE') {
       this.activeHolePattern = 'RAPID_HOLE_SEQUENCE';
+<<<<<<< HEAD
       this.attackSprite.reset();
       this.currentSprite = this.attackSprite;
+=======
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
       this.addFloatingText('⚡ RAPID HOLE BURST!', this.x + this.width / 2, this.y - 20, '#f97316', '#7c2d12');
     } else if (newState === 'BLOCK') {
       this.blockTimer = RATKEEPER_CONFIG.BLOCK_COOLDOWN;
       this.blockSprite.reset();
+<<<<<<< HEAD
       this.currentSprite = this.blockSprite;
       this.vx = 0;
+=======
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
     } else if (newState === 'HURT') {
       this.hurtTimer = RATKEEPER_CONFIG.HURT_DURATION;
       this.hitFlashTimer = 0.4;
@@ -443,6 +478,7 @@ export class RatkeeperBoss implements Rect {
     }
 
     // 2. ALL OTHER TIMES: Boss completely blocks and deflects every attack!
+<<<<<<< HEAD
     this.facingRight = football.x > this.x + this.width / 2;
     if (this.hitCooldown <= 0) {
       this.hitCooldown = 0.25;
@@ -460,6 +496,22 @@ export class RatkeeperBoss implements Rect {
     football.vx = bounceDir * Math.max(380, Math.abs(football.vx) * 0.95);
     football.vy = -180;
     football.state = 'AIRBORNE';
+=======
+    if (this.hitCooldown <= 0) {
+      this.hitCooldown = 0.22;
+      this.blockTimer = RATKEEPER_CONFIG.BLOCK_COOLDOWN;
+      this.blockSprite.reset();
+      this.setState('BLOCK');
+
+      const bounceDir = football.x < this.x + this.width / 2 ? -1 : 1;
+      football.vx = bounceDir * Math.max(380, Math.abs(football.vx) * 0.95);
+      football.vy = -180;
+      football.state = 'AIRBORNE';
+
+      this.playSound('boss_block');
+      this.addFloatingText('🛡️ BLOCKED! (0 DMG)', this.x + this.width / 2, this.y - 20, '#38bdf8', '#0369a1');
+    }
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
   }
 
   // ==============================================================
@@ -473,8 +525,12 @@ export class RatkeeperBoss implements Rect {
     arena: BossArena,
     onBossDefeated?: () => void,
     onCameraShake?: (intensity: number, duration: number) => void,
+<<<<<<< HEAD
     onSpawnHealthPotion?: (potion: HealthPotion) => void,
     extraDogs?: DogEnemy[]
+=======
+    onSpawnHealthPotion?: (potion: HealthPotion) => void
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
   ) {
     this.arena = arena;
     this.animTime += dt;
@@ -554,10 +610,17 @@ export class RatkeeperBoss implements Rect {
 
       // Spawn two dogs for the final battle if they are not already alive
       if (this.summonedMinions.length < 2) {
+<<<<<<< HEAD
         const dog1 = new DogEnemy('DOG_1', arena.leftX + 360, arena.floorY - 48, RATKEEPER_CONFIG.PHASE_5_DOG_HEALTH, false, 'Shadow Hound 1', 'dog', true);
         const dog2 = new DogEnemy('DOG_2', arena.rightX - 360, arena.floorY - 48, RATKEEPER_CONFIG.PHASE_5_DOG_HEALTH, false, 'Shadow Hound 2', 'dog', true);
         dog1.state = 'CHASING';
         dog2.state = 'CHASING';
+=======
+        const dog1 = new DogEnemy('DOG_1', arena.leftX + 360, arena.floorY - 48, RATKEEPER_CONFIG.PHASE_5_DOG_HEALTH, false, 'Shadow Hound 1', 'dog');
+        const dog2 = new DogEnemy('DOG_2', arena.rightX - 360, arena.floorY - 48, RATKEEPER_CONFIG.PHASE_5_DOG_HEALTH, false, 'Shadow Hound 2', 'dog');
+        dog1.state = 'ALERT';
+        dog2.state = 'ALERT';
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
         this.summonedMinions = [dog1, dog2];
       }
 
@@ -600,12 +663,19 @@ export class RatkeeperBoss implements Rect {
       }
     }
 
+<<<<<<< HEAD
     const allDogs = [...this.summonedMinions, ...(extraDogs || [])];
 
     // Step 11: Update Projectiles (Auto-destruction & memory safety, dogs take same damage as player)
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const proj = this.projectiles[i];
       const isAlive = proj.update(dt, player, platforms, allDogs);
+=======
+    // Step 11: Update Projectiles (Auto-destruction & memory safety)
+    for (let i = this.projectiles.length - 1; i >= 0; i--) {
+      const proj = this.projectiles[i];
+      const isAlive = proj.update(dt, player, platforms);
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
       if (!isAlive) {
         this.projectiles.splice(i, 1);
       }
@@ -614,7 +684,10 @@ export class RatkeeperBoss implements Rect {
     // STEP 17: Update Minions using existing DogEnemy framework
     for (let i = this.summonedMinions.length - 1; i >= 0; i--) {
       const minion = this.summonedMinions[i];
+<<<<<<< HEAD
       minion.isInBossRoom = true;
+=======
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
       if (minion.isDefeated) {
         this.summonedMinions.splice(i, 1);
       } else {
@@ -631,7 +704,18 @@ export class RatkeeperBoss implements Rect {
     }
 
     // Update Boss State Machine
+<<<<<<< HEAD
     this.updateBossState(dt, player, football, platforms, arena, onCameraShake, allDogs);
+=======
+    this.updateBossState(dt, player, football, platforms, arena, onCameraShake);
+
+    // Update Sprite Animations
+    this.idleSprite.update(dt);
+    this.runSprite.update(dt);
+    this.jumpSprite.update(dt);
+    this.attackSprite.update(dt);
+    this.blockSprite.update(dt);
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
 
     // Select Active Sprite Sheet cleanly
     if (this.blockTimer > 0 || this.state === 'BLOCK') {
@@ -643,6 +727,7 @@ export class RatkeeperBoss implements Rect {
       (this.state === 'AIR_ATTACK' && this.airAttackSubState === 'BOMBARDMENT')
     ) {
       this.currentSprite = this.attackSprite;
+<<<<<<< HEAD
     } else if (
       this.state === 'AIR_ATTACK' ||
       this.state === 'FINAL_JUMP_ATTACK' ||
@@ -652,11 +737,17 @@ export class RatkeeperBoss implements Rect {
     ) {
       this.currentSprite = this.jumpSprite;
     } else if (Math.abs(this.vx) > 15 && this.isGrounded) {
+=======
+    } else if (this.state === 'AIR_ATTACK' || this.state === 'FINAL_JUMP_ATTACK' || !this.isGrounded) {
+      this.currentSprite = this.jumpSprite;
+    } else if (Math.abs(this.vx) > 20 && this.isGrounded) {
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
       this.currentSprite = this.runSprite;
     } else {
       this.currentSprite = this.idleSprite;
     }
 
+<<<<<<< HEAD
     // Update animations with natural pacing and footstep synchronization
     this.idleSprite.update(dt);
 
@@ -697,6 +788,8 @@ export class RatkeeperBoss implements Rect {
       this.blockSprite.update(dt);
     }
 
+=======
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
     // Spawn Dynamic Boss Particles
     this.animTime += dt;
     const handX = this.facingRight ? this.x + this.width + 12 : this.x - 12;
@@ -776,9 +869,13 @@ export class RatkeeperBoss implements Rect {
       this.state !== 'FINAL_JUMP_ATTACK' &&
       this.state !== 'COOLDOWN_IDLE' &&
       this.state !== 'HURT' &&
+<<<<<<< HEAD
       this.state !== 'HOLE_ATTACK' &&
       this.state !== 'BLOCK' &&
       this.blockTimer <= 0
+=======
+      this.state !== 'HOLE_ATTACK'
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
     ) {
       this.triggerEvadeLeap(player, arena);
     } else if (distX < 55 && distY < 80 && this.isGrounded && this.state !== 'EVADE_LEAP' && this.state !== 'AIR_ATTACK') {
@@ -832,8 +929,12 @@ export class RatkeeperBoss implements Rect {
     football: Football,
     platforms: Platform[],
     arena: BossArena,
+<<<<<<< HEAD
     onCameraShake?: (intensity: number, duration: number) => void,
     allDogs: DogEnemy[] = []
+=======
+    onCameraShake?: (intensity: number, duration: number) => void
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
   ) {
     this.stateTimer += dt;
 
@@ -943,6 +1044,7 @@ export class RatkeeperBoss implements Rect {
         const exitHole = arena.getHole(this.currentExitHole);
 
         if (!this.isUnderground) {
+<<<<<<< HEAD
           // Phase A: Rapid dash/leap into entrance hole
           const targetX = enterHole.x + enterHole.width / 2 - this.width / 2;
           const distToHole = targetX - this.x;
@@ -954,21 +1056,42 @@ export class RatkeeperBoss implements Rect {
             // Arrived at hole: Begin Back Exposure Telegraph!
             this.vx = 0;
             this.x = targetX;
+=======
+          // Phase A: Move towards entrance hole
+          const targetX = enterHole.x + enterHole.width / 2 - this.width / 2;
+          const distToHole = targetX - this.x;
+
+          if (Math.abs(distToHole) > 15 && !this.isExposingBackInHole) {
+            this.facingRight = distToHole > 0;
+            this.vx = (distToHole > 0 ? 1 : -1) * (this.currentPhase === 'PHASE_4' ? RATKEEPER_CONFIG.ENRAGED_RUN_SPEED : RATKEEPER_CONFIG.RUN_SPEED);
+          } else {
+            // Arrived at hole: Begin Back Exposure Telegraph!
+            this.vx = 0;
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
             if (!this.isExposingBackInHole) {
               this.isExposingBackInHole = true;
               this.stateTimer = 0;
               enterHole.triggerEnterSplash();
               this.playSound('boss_burrow');
+<<<<<<< HEAD
               this.addFloatingText('🎯 ENTERING TUNNEL!', this.x + this.width / 2, this.y - 20, '#38bdf8', '#0369a1');
             }
 
             // Expose back for readable window (0.50s)
             if (this.stateTimer >= 0.50) {
+=======
+              this.addFloatingText('🎯 BURROWING!', this.x + this.width / 2, this.y - 20, '#38bdf8', '#0369a1');
+            }
+
+            // Expose back for readable window (0.60s)
+            if (this.stateTimer >= RATKEEPER_CONFIG.HOLE_ENTRY_TELEGRAPH_DURATION) {
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
               // Subterranean dive!
               this.isExposingBackInHole = false;
               this.isUnderground = true;
               this.stateTimer = 0;
               enterHole.triggerEnterSplash();
+<<<<<<< HEAD
               this.playSound('boss_burrow');
               this.burrowTimer = 0.9;
               if (onCameraShake) onCameraShake(4, 0.2);
@@ -1006,23 +1129,44 @@ export class RatkeeperBoss implements Rect {
             });
           }
 
+=======
+              this.burrowTimer = 1.0;
+            }
+          }
+        } else {
+          // Phase B: Traveling underground towards exit hole
+          this.burrowTimer -= dt;
+
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
           if (this.burrowTimer <= 0) {
             // Emerge from exit hole!
             this.isUnderground = false;
             this.x = exitHole.x + exitHole.width / 2 - this.width / 2;
             this.y = exitHole.groundY - this.height;
+<<<<<<< HEAD
             this.vy = -380; // Spring up high out of tunnel hole!
+=======
+            this.vy = -340; // Spring up out of mud
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
             this.facingRight = player.x > this.x;
 
             exitHole.triggerExitBurst();
             this.playSound('boss_burst');
+<<<<<<< HEAD
             if (onCameraShake) onCameraShake(7, 0.3);
             this.addFloatingText('⚡ TUNNEL TELEPORT!', this.x + this.width / 2, this.y - 25, '#f59e0b', '#78350f');
+=======
+            if (onCameraShake) onCameraShake(6, 0.25);
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
 
             // Fire projectiles on exit based on current pattern step
             const patternData = RATKEEPER_PATTERNS[this.activeHolePattern] || RATKEEPER_PATTERNS.PHASE_1_OPPOSITE;
             const stepData = patternData[this.currentPatternStep % patternData.length];
+<<<<<<< HEAD
             const numShots = stepData?.fireProjectilesOnExit || (this.activeHolePattern === 'RAPID_HOLE_SEQUENCE' ? 5 : 2);
+=======
+            const numShots = stepData?.fireProjectilesOnExit || (this.activeHolePattern === 'RAPID_HOLE_SEQUENCE' ? 5 : 1);
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
 
             this.burstRemaining = numShots;
             this.burstTimer = 0;
@@ -1117,8 +1261,11 @@ export class RatkeeperBoss implements Rect {
             this.airAttackSubState = 'SLAM';
             this.airTargetX = player.x + player.width / 2 - this.width / 2;
             this.shadowTelegraphAlpha = 1.0;
+<<<<<<< HEAD
             this.currentSprite = this.jumpSprite;
             this.jumpSprite.reset();
+=======
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
           }
         } else {
           // Ground Slam downward back to floor
@@ -1126,6 +1273,7 @@ export class RatkeeperBoss implements Rect {
           this.vy = RATKEEPER_CONFIG.SLAM_VELOCITY;
           this.y += this.vy * dt;
 
+<<<<<<< HEAD
           const playerBox: Rect = { x: player.x, y: player.y, width: player.width, height: player.height };
 
           // Check direct crush collision with player during descent
@@ -1147,6 +1295,8 @@ export class RatkeeperBoss implements Rect {
             }
           }
 
+=======
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
           if (this.y + this.height >= arena.floorY) {
             this.y = arena.floorY - this.height;
             this.vy = 0;
@@ -1157,6 +1307,7 @@ export class RatkeeperBoss implements Rect {
             this.playSound('boss_slam');
             if (onCameraShake) onCameraShake(14, 0.5);
 
+<<<<<<< HEAD
             // Ground crush impact zone on landing
             const landingImpactBox: Rect = {
               x: this.x - 30,
@@ -1184,6 +1335,8 @@ export class RatkeeperBoss implements Rect {
               }
             }
 
+=======
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
             this.projectiles.push(
               new BossProjectile('slam-left', this.x, arena.floorY - 10, -340, 0, RATKEEPER_CONFIG.SHOCKWAVE_DAMAGE, 'shockwave', 20),
               new BossProjectile('slam-right', this.x + this.width, arena.floorY - 10, 340, 0, RATKEEPER_CONFIG.SHOCKWAVE_DAMAGE, 'shockwave', 20)
@@ -1226,8 +1379,12 @@ export class RatkeeperBoss implements Rect {
               RATKEEPER_CONFIG.PHASE_3_MINION_HEALTH,
               false,
               'Shadow Hound 1',
+<<<<<<< HEAD
               'dog',
               true
+=======
+              'dog'
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
             );
             const dog2 = new DogEnemy(
               'DOG_2',
@@ -1236,11 +1393,18 @@ export class RatkeeperBoss implements Rect {
               RATKEEPER_CONFIG.PHASE_3_MINION_HEALTH,
               false,
               'Shadow Hound 2',
+<<<<<<< HEAD
               'dog',
               true
             );
             dog1.state = 'CHASING';
             dog2.state = 'CHASING';
+=======
+              'dog'
+            );
+            dog1.state = 'ALERT';
+            dog2.state = 'ALERT';
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
             this.summonedMinions.push(dog1, dog2);
           }
 
@@ -1344,6 +1508,7 @@ export class RatkeeperBoss implements Rect {
             this.addFloatingText('💥 DIRECT SLAM! -45 HP', player.x + player.width / 2, player.y - 20, '#ef4444', '#7f1d1d');
           }
 
+<<<<<<< HEAD
           // Check direct hit damage on dogs during descent
           for (const dog of allDogs) {
             if (!dog.isDefeated && dog.state !== 'DEAD' && dog.damageCooldownTimer <= 0) {
@@ -1356,6 +1521,8 @@ export class RatkeeperBoss implements Rect {
             }
           }
 
+=======
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
           if (this.y + this.height >= arena.floorY) {
             this.y = arena.floorY - this.height;
             this.vy = 0;
@@ -1365,6 +1532,7 @@ export class RatkeeperBoss implements Rect {
             this.playSound('boss_slam');
             if (onCameraShake) onCameraShake(16, 0.5);
 
+<<<<<<< HEAD
             // Ground crush impact zone on landing
             const landingImpactBox: Rect = {
               x: this.x - 30,
@@ -1392,6 +1560,8 @@ export class RatkeeperBoss implements Rect {
               }
             }
 
+=======
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
             // Ground shockwaves
             this.projectiles.push(
               new BossProjectile(`slam-sw-l-${Date.now()}`, this.x, arena.floorY - 12, -360, 0, RATKEEPER_CONFIG.SHOCKWAVE_DAMAGE, 'shockwave', 20),
@@ -1525,6 +1695,7 @@ export class RatkeeperBoss implements Rect {
 
   // Setup Hole Attack Pattern Step
   private setupHoleAttack(arena: BossArena) {
+<<<<<<< HEAD
     const hole1 = arena.getHole('HOLE_1');
     const hole2 = arena.getHole('HOLE_2');
     const bossCenterX = this.x + this.width / 2;
@@ -1543,6 +1714,15 @@ export class RatkeeperBoss implements Rect {
     this.isUnderground = false;
     this.isExposingBackInHole = false;
     this.stateTimer = 0;
+=======
+    const pattern = RATKEEPER_PATTERNS[this.activeHolePattern] || RATKEEPER_PATTERNS.PHASE_1_OPPOSITE;
+    const step = pattern[this.currentPatternStep % pattern.length];
+
+    this.currentEnterHole = step.enterHole;
+    this.currentExitHole = step.exitHole;
+    this.isUnderground = false;
+    this.isExposingBackInHole = false;
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
     this.setState('HOLE_ATTACK');
   }
 
@@ -1796,7 +1976,11 @@ export class RatkeeperBoss implements Rect {
 
     // Draw active boss sprite
     if (this.currentSprite && this.currentSprite.isLoaded) {
+<<<<<<< HEAD
       this.currentSprite.drawProportional(ctx, destX, destY, this.renderWidth, this.renderHeight, flipX, 440);
+=======
+      this.currentSprite.draw(ctx, destX, destY, this.renderWidth, this.renderHeight, flipX);
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
     } else {
       const img = DogEnemy.getLoadedImage('rat_boss');
       if (img && img.complete && img.naturalWidth > 0) {

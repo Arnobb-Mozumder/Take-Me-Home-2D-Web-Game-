@@ -37,7 +37,10 @@ export const App: React.FC = () => {
   const [showControlsHelp, setShowControlsHelp] = useState<boolean>(false);
   const [showTouchControls, setShowTouchControls] = useState<boolean>(false);
   const [isMuted, setIsMuted] = useState<boolean>(false);
+<<<<<<< HEAD
   const [isBossGameOver, setIsBossGameOver] = useState<boolean>(false);
+=======
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
 
   // Initialize or re-initialize game
   const initGame = useCallback((forceNew = false) => {
@@ -57,6 +60,7 @@ export const App: React.FC = () => {
     const height = Math.max(500, Math.floor(rect.height));
 
     const game = new Game(canvasRef.current, width, height);
+<<<<<<< HEAD
     game.onGameStateChange = (state, level) => {
       if (state === 'PLAYER_DIED' && level === 3) {
         setIsBossGameOver(true);
@@ -64,6 +68,8 @@ export const App: React.FC = () => {
         setIsBossGameOver(false);
       }
     };
+=======
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
     gameRef.current = game;
     game.start();
     setHasActiveGame(true);
@@ -160,7 +166,10 @@ export const App: React.FC = () => {
   const handleSelectLevel = (levelNumber: number, checkpointId?: string, forceBossReplay?: boolean) => {
     setIsStartMenuOpen(false);
     setIsLevelSelectOpen(false);
+<<<<<<< HEAD
     setIsBossGameOver(false);
+=======
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
 
     if (!gameRef.current) {
       if (!canvasRef.current || !containerRef.current) return;
@@ -169,6 +178,7 @@ export const App: React.FC = () => {
       const height = Math.max(500, Math.floor(rect.height));
 
       const game = new Game(canvasRef.current, width, height);
+<<<<<<< HEAD
       game.onGameStateChange = (state, level) => {
         if (state === 'PLAYER_DIED' && level === 3) {
           setIsBossGameOver(true);
@@ -176,6 +186,8 @@ export const App: React.FC = () => {
           setIsBossGameOver(false);
         }
       };
+=======
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
       gameRef.current = game;
       game.warpToLevel(levelNumber, { checkpointId, forceBossReplay });
       game.start();
@@ -187,6 +199,7 @@ export const App: React.FC = () => {
     }
   };
 
+<<<<<<< HEAD
   const handleRetryBossFight = () => {
     setIsBossGameOver(false);
     if (gameRef.current) {
@@ -194,6 +207,8 @@ export const App: React.FC = () => {
     }
   };
 
+=======
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
   const handleToggleFullscreen = () => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen?.().catch(() => {});
@@ -482,6 +497,7 @@ export const App: React.FC = () => {
         onSelectLevel={handleSelectLevel}
         currentLevel={gameRef.current?.environment.currentLevel || 1}
       />
+<<<<<<< HEAD
 
       {/* 8. Boss Battle Retry Modal Overlay */}
       {isBossGameOver && !isStartMenuOpen && (
@@ -526,6 +542,8 @@ export const App: React.FC = () => {
           </div>
         </div>
       )}
+=======
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
     </div>
   );
 };

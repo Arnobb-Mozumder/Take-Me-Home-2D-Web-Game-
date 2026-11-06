@@ -54,7 +54,10 @@ export class Game {
 
   // Callback for debug UI updates
   private onDebugUpdate?: (info: GameDebugInfo) => void;
+<<<<<<< HEAD
   public onGameStateChange?: (state: 'PLAYING' | 'BALL_LOST' | 'PLAYER_DIED' | 'LEVEL_TRANSITION', currentLevel: number) => void;
+=======
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
 
   constructor(canvas: HTMLCanvasElement, initialWidth: number = 1365, initialHeight: number = 768) {
     this.canvas = canvas;
@@ -224,6 +227,7 @@ export class Game {
     if (this.gameState !== 'PLAYING') return;
 
     this.gameState = 'PLAYER_DIED';
+<<<<<<< HEAD
     this.camera.addShake(8, 0.4);
 
     if (this.environment.currentLevel === 3 || reason === 'boss') {
@@ -233,6 +237,11 @@ export class Game {
       this.respawnTimer = 1.3;
     }
 
+=======
+    this.respawnTimer = 1.3;
+    this.camera.addShake(8, 0.4);
+
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
     if (reason === 'water') {
       this.environment.triggerWaterSplash(this.player.x, this.player.y);
     } else if (reason === 'thorns') {
@@ -240,10 +249,13 @@ export class Game {
     } else if (reason === 'dog' || reason === 'boss') {
       this.environment.triggerImpactDust(this.player.x, this.player.y);
     }
+<<<<<<< HEAD
 
     if (this.onGameStateChange) {
       this.onGameStateChange(this.gameState, this.environment.currentLevel);
     }
+=======
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
   }
 
   public handleBossDefeat() {
@@ -283,6 +295,7 @@ export class Game {
     this.saveGameProgress(true, '👑 The Ratkeeper has fallen! Catacombs Unlocked.');
   }
 
+<<<<<<< HEAD
   public retryBossFight() {
     // 1. Force full reload of Level 3 Boss Arena with replay active
     this.environment.loadLevel(3, { forceBossReplay: true });
@@ -290,10 +303,14 @@ export class Game {
     this.activeCheckpoint.isActive = true;
 
     // 2. Reset Player with full health (100 HP, 4 hearts)
+=======
+  private respawnAtCheckpoint() {
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
     this.player.reset(
       this.activeCheckpoint.playerSpawnX,
       this.activeCheckpoint.playerSpawnY
     );
+<<<<<<< HEAD
     this.player.health = this.player.maxHealth;
     this.player.facingRight = true;
     this.player.invincibilityTimer = 0;
@@ -366,18 +383,26 @@ export class Game {
     this.player.facingRight = true;
     this.player.invincibilityTimer = 0;
 
+=======
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
     this.football.reset(
       this.activeCheckpoint.ballSpawnX,
       this.activeCheckpoint.ballSpawnY
     );
     this.environment.dogs.forEach(d => d.reset());
     this.environment.healthPotions.forEach(p => p.reset());
+<<<<<<< HEAD
 
+=======
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
     if (this.environment.bossArena && !this.environment.bossArena.isDefeated) {
       this.environment.bossArena.reset();
       if (this.environment.ratkeeperBoss) {
         this.environment.ratkeeperBoss = new RatkeeperBoss(1200, 380, this.environment.bossArena);
+<<<<<<< HEAD
         this.environment.ratkeeperBoss.health = this.environment.ratkeeperBoss.maxHealth; // Full health!
+=======
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
       }
     }
     if (this.environment.elevator && this.activeCheckpoint.id === 'jungle-cp-ratkeeper-antechamber') {
@@ -387,10 +412,13 @@ export class Game {
     }
     this.gameState = 'PLAYING';
     this.fadeAlpha = 0;
+<<<<<<< HEAD
 
     if (this.onGameStateChange) {
       this.onGameStateChange(this.gameState, this.environment.currentLevel);
     }
+=======
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
   }
 
   private loop = (currentTime: number) => {
@@ -563,9 +591,12 @@ export class Game {
       // 3.5 Dog Enemies Update, AI State Machine & Damage Interaction
       if (this.environment.dogs.length > 0) {
         this.environment.dogs.forEach(dog => {
+<<<<<<< HEAD
           if (this.environment.currentLevel === 3 || this.environment.bossArena) {
             dog.isInBossRoom = true;
           }
+=======
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
           const activeDogPlatforms = getActivePlatformsForEntity(dog.x, dog.y, playerPlatforms);
           dog.update(
             dt,
@@ -674,8 +705,12 @@ export class Game {
           (potion) => {
             this.environment.healthPotions.push(potion);
             this.environment.triggerHealBurst(potion.x + potion.width / 2, potion.y + potion.height / 2);
+<<<<<<< HEAD
           },
           this.environment.dogs
+=======
+          }
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
         );
 
         if (this.player.health <= 0 && this.gameState === 'PLAYING') {
@@ -891,6 +926,7 @@ export class Game {
       }
     } else {
       // Game Over / Ball Lost Respawn Animation
+<<<<<<< HEAD
       // 1. Allow user to immediately retry via Space, Enter, or R key
       if (this.input.consumeRetryRequest()) {
         this.respawnAtCheckpoint();
@@ -908,6 +944,17 @@ export class Game {
         if (this.respawnTimer <= 0) {
           this.respawnAtCheckpoint();
         }
+=======
+      this.respawnTimer -= dt;
+      this.environment.update(dt);
+
+      if (this.respawnTimer < 0.6) {
+        this.fadeAlpha = Math.min(1, (0.6 - this.respawnTimer) / 0.6);
+      }
+
+      if (this.respawnTimer <= 0) {
+        this.respawnAtCheckpoint();
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
       }
     }
 
@@ -1764,6 +1811,7 @@ export class Game {
 
     // 3. Game Over / Ball Lost Banner Modal
     if (this.gameState === 'BALL_LOST' || this.gameState === 'PLAYER_DIED') {
+<<<<<<< HEAD
       const isBossFight = this.environment.currentLevel === 3;
       const isBall = this.gameState === 'BALL_LOST';
 
@@ -1853,6 +1901,45 @@ export class Game {
           cardY + 92
         );
       }
+=======
+      const isBall = this.gameState === 'BALL_LOST';
+
+      // Banner Container Card
+      const cardW = 340;
+      const cardH = 130;
+      const cardX = width / 2 - cardW / 2;
+      const cardY = height / 2 - cardH / 2;
+
+      this.ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
+      this.ctx.strokeStyle = isBall ? '#f59e0b' : '#ef4444';
+      this.ctx.lineWidth = 2.5;
+
+      this.ctx.beginPath();
+      this.ctx.roundRect(cardX, cardY, cardW, cardH, 16);
+      this.ctx.fill();
+      this.ctx.stroke();
+
+      // Main Title
+      this.ctx.font = '900 28px system-ui, sans-serif';
+      this.ctx.fillStyle = isBall ? '#fbbf24' : '#f87171';
+      this.ctx.textAlign = 'center';
+      this.ctx.textBaseline = 'top';
+      this.ctx.fillText(isBall ? '⚽ BALL LOST!' : '💔 TRY AGAIN!', width / 2, cardY + 22);
+
+      // Subtitle
+      this.ctx.font = '500 13px system-ui, sans-serif';
+      this.ctx.fillStyle = '#cbd5e1';
+      this.ctx.fillText(`Respawning at ${this.activeCheckpoint.name}...`, width / 2, cardY + 68);
+
+      // Tip / Requirement Banner
+      this.ctx.font = 'bold 11px monospace';
+      this.ctx.fillStyle = isBall ? '#fef08a' : '#fca5a5';
+      this.ctx.fillText(
+        isBall ? 'Use high power kick to clear gaps & walls!' : 'Watch out for deep water & thorn bushes!',
+        width / 2,
+        cardY + 92
+      );
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
     }
 
     this.ctx.restore();

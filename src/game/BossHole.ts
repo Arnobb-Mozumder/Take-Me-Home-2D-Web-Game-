@@ -366,6 +366,7 @@ export class BossHole implements Rect {
       }
     }
 
+<<<<<<< HEAD
     // 7. Tunnel Entrance Arch & Floating Tag Indicator
     ctx.save();
     ctx.strokeStyle = 'rgba(245, 158, 11, 0.4)';
@@ -393,6 +394,8 @@ export class BossHole implements Rect {
     ctx.fillText(tagText, centerX, tagY);
     ctx.restore();
 
+=======
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
     ctx.restore();
   }
 

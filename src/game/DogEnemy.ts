@@ -137,12 +137,19 @@ export class DogEnemy {
       { sx: 1164, sy: 186, sw: 361, sh: 263 },
     ],
     rat_jump: [
+<<<<<<< HEAD
       { sx: 34, sy: 140, sw: 449, sh: 306 },
       { sx: 515, sy: 100, sw: 536, sh: 332 },
       { sx: 1050, sy: 32, sw: 462, sh: 382 },
       { sx: 50, sy: 517, sw: 451, sh: 439 },
       { sx: 489, sy: 575, sw: 501, sh: 348 },
       { sx: 1034, sy: 579, sw: 479, sh: 347 },
+=======
+      { sx: 32, sy: 184, sw: 453, sh: 264 },
+      { sx: 513, sy: 131, sw: 514, sh: 303 },
+      { sx: 1059, sy: 30, sw: 455, sh: 386 },
+      { sx: 487, sy: 630, sw: 505, sh: 295 },
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
     ],
     rat_attack: [
       { sx: 109, sy: 9, sw: 633, sh: 454 },
@@ -1146,11 +1153,16 @@ export class DogEnemy {
     // Pick sprite key corresponding to current AI state and enemy type
     let animKey = 'sleep';
     if (this.isBoss) {
+<<<<<<< HEAD
       if (Math.abs(this.vy) > 80 && !this.isGrounded) {
         animKey = 'rat_jump';
       } else {
         animKey = 'rat_boss';
       }
+=======
+      // Main Boss Character strictly uses rat_boss.png
+      animKey = 'rat_boss';
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
     } else if (this.enemyType === 'rat') {
       if (Math.abs(this.vy) > 80 && !this.isGrounded) {
         animKey = 'rat_jump';

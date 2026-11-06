@@ -88,8 +88,13 @@ export class BossArena {
     this.elevatedPlatforms = [];
 
     // Place HOLE_1 in left combat wing (680), HOLE_2 in right combat wing (1580)
+<<<<<<< HEAD
     this.hole1 = new BossHole('HOLE_1', 680, floorY, 190, 46, 'TUNNEL HOLE 1 (WEST)');
     this.hole2 = new BossHole('HOLE_2', 1580, floorY, 190, 46, 'TUNNEL HOLE 2 (EAST)');
+=======
+    this.hole1 = new BossHole('HOLE_1', 680, floorY, 190, 46, 'West Mud Hole');
+    this.hole2 = new BossHole('HOLE_2', 1580, floorY, 190, 46, 'East Mud Hole');
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
 
     this.holes = {
       HOLE_1: this.hole1,
@@ -365,6 +370,7 @@ export class BossArena {
     // 6. BIOLUMINESCENT MUSHROOM CLUSTERS
     this.drawMushroomColonies(ctx, cameraX, cameraY, drawFloorY);
 
+<<<<<<< HEAD
     // 7. SUBTERRANEAN ABYSS BENEATH THE PLATFORM
     this.drawSubterraneanAbyss(ctx, drawLeftX, drawRightX, drawFloorY);
 
@@ -375,6 +381,18 @@ export class BossArena {
     // 9. OVERGROWN CAVERN CEILING (Hanging Roots, Stalactites, Ivy Vines)
     this.drawCavernCeiling(ctx, drawLeftX, drawRightX, drawCeilY);
 
+=======
+    // 7. RENDER THE 2 DISTORTED GROUND MUD HOLES
+    this.hole1.render(ctx, cameraX, cameraY);
+    this.hole2.render(ctx, cameraX, cameraY);
+
+    // 8. OVERGROWN CAVERN CEILING (Hanging Roots, Stalactites, Ivy Vines)
+    this.drawCavernCeiling(ctx, drawLeftX, drawRightX, drawCeilY);
+
+    // 9. SUBTERRANEAN ABYSS BENEATH THE PLATFORM
+    this.drawSubterraneanAbyss(ctx, drawLeftX, drawRightX, drawFloorY);
+
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
     // 10. DRIPPING WATER DROPLETS
     ctx.fillStyle = 'rgba(167, 243, 208, 0.7)';
     for (const d of this.waterDrops) {

@@ -141,7 +141,11 @@ export const RATKEEPER_CONFIG = {
   NORMAL_ATTACK_DAMAGE: 0,
   FRONT_BLOCK_ZONE_WIDTH: 110,
   FRONT_BLOCK_ZONE_HEIGHT: 220,
+<<<<<<< HEAD
   BLOCK_COOLDOWN: 0.68,
+=======
+  BLOCK_COOLDOWN: 0.50,
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
   BOSS_HIT_COOLDOWN: 0.35, // Prevents repeated collision frames from draining boss health instantly
 
   // Proximity Evade Mechanics: when player gets too close, boss leaps high and switches sides

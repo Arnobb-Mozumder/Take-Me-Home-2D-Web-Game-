@@ -7,8 +7,11 @@ export class InputManager {
   private recallRequested = false;
   private interactRequested = false;
   private elevatorRequested = false;
+<<<<<<< HEAD
   private retryRequested = false;
   private quitRequested = false;
+=======
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
   private virtualLeft = false;
   private virtualRight = false;
   private virtualJump = false;
@@ -44,9 +47,12 @@ export class InputManager {
       if (e.code === 'KeyK' || e.code === 'KeyE' || e.code === 'Space' || e.code === 'Enter') {
         this.kickRequested = true;
       }
+<<<<<<< HEAD
       if (e.code === 'Space' || e.code === 'Enter' || e.code === 'KeyR') {
         this.retryRequested = true;
       }
+=======
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
       if (e.code === 'KeyF') {
         this.elevatorRequested = true;
       }
@@ -56,9 +62,12 @@ export class InputManager {
       if (e.code === 'KeyR') {
         this.aimRequested = true;
       }
+<<<<<<< HEAD
       if (e.code === 'KeyQ' || e.code === 'Escape') {
         this.quitRequested = true;
       }
+=======
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
       if (e.code === 'KeyQ' || e.code === 'KeyT') {
         this.teleportRequested = true;
       }
@@ -213,6 +222,7 @@ export class InputManager {
     }
     return false;
   }
+<<<<<<< HEAD
 
   // Consume a retry request (Space / Enter / R)
   public consumeRetryRequest(): boolean {
@@ -231,5 +241,7 @@ export class InputManager {
     }
     return false;
   }
+=======
+>>>>>>> e8c0cb20009c65fd4cf5f49b27f746153ccc0b72
 }
 
